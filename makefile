@@ -32,4 +32,4 @@ cleanall:clean
 
 commit:
 	git commit -am "Commit"
-	git push origin maste
+	git push origin master
