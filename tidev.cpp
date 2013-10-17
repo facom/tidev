@@ -94,6 +94,8 @@ typedef FILE* file;
 #define REARTH (6.371E6) //m
 #define GCONST (GSL_CONST_MKSA_GRAVITATIONAL_CONSTANT) // m^3 / (kg s^2)
 
+#define MICRO 1E-6
+
 //BEHAVIOR
 #define MAXBODIES 10
 

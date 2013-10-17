@@ -128,7 +128,7 @@ int main(int argc,char *argv[])
     //STORE IN OUTPUT FILE
     if(fmod(tstep,dtscreen)<1E-5){
       T2=Time();
-      TIME=(T2-T1)*1E-6;
+      TIME=(T2-T1)*MICRO;
       printf("t=%e, y[0]=%e, y[1]/n=%e, y[2]=%e, y[3]=%e, y[4]=%e, time = %e sec\n",
 	     t,y[0],y[1]/Bodies[IBody].n,Etid,y[3],y[4],TIME);
       if(t>dtstep){
@@ -142,7 +142,7 @@ int main(int argc,char *argv[])
   TEND=Time();
   TAVG/=NT;
   printf("Average time: %e secs\n",TAVG);
-  printf("Total time: %e secs\n",(TEND-TINI)*1E-6);
+  printf("Total time: %e secs\n",(TEND-TINI)*MICRO);
   fclose(fl);
 
   return 0;
