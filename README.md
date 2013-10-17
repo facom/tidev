@@ -1,6 +1,13 @@
 tidev
 =====
 
+A general framework to calculate the Tidal Evolution of interacting
+bodies.
+
+#################################################################################
+# Copyright (C) 2013 Jorge I. Zuluaga, Mario Melita, Pablo Cuartas, Bayron Portilla
+#################################################################################
+
 Quick start
 -----------
 
