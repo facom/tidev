@@ -17,9 +17,9 @@ Quick start
 
 2. Install dependencies:
 
-      	 $ sudo apt-get install libgsl0-dev libgsl0ldbl
+       $ sudo apt-get install libgsl0-dev libgsl0ldbl
 
-	 $ sudo apt-get install libconfig++8 libconfig++-dev
+       $ sudo apt-get install libconfig++8 libconfig++-dev
 
    If dependencies installation does not work properly you can
    download sources and compile them directly into the util directory.
@@ -34,21 +34,21 @@ Quick start
 
 3. Configure system:
 
-   	 $ nano tidev.cfg
+       $ nano tidev.cfg
 
 4. Compile:
 
-	 $ make tidev-resonances.out
+       $ make tidev-resonances.out
 
    If you are using GSL and Libconfig versions compiled from the
    sources in the util directory make using makefile.local instead the
    default makefile:
    
-	 $ make -f makefile.local tidev-resonances.out
+       $ make -f makefile.local tidev-resonances.out
 
 4. Run:
 
-	 $ ./tidev-resonances.out
+       $ ./tidev-resonances.out
 
 To know more read the MANUAL.md(html).
 
