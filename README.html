@@ -1,0 +1,93 @@
+<h1>tidev</h1>
+
+<p>A general framework to calculate the evolution of rotation for tidally
+interacting bodies using the formalism by Efroimsky.</p>
+
+<h2>Quick start</h2>
+
+<ol>
+<li><p>Get a copy of tidev from https://github.com/facom/tidev:</p>
+
+<p>NOTE: You can get an anonymous clone of the project using:</p>
+
+<p>git clone git://github.com/facom/tidev.git</p>
+
+<p>Then you will be able to get updates using 'git pull'.</p></li>
+<li><p>Install dependencies:</p>
+
+<p>$ sudo apt-get install libgsl0-dev libgsl0ldbl</p>
+
+<p>$ sudo apt-get install libconfig++8 libconfig++-dev</p>
+
+<p>If dependencies installation does not work properly you can
+download sources and compile them directly into the util directory.</p>
+
+<p>Sources for gsl: http://www.gnu.org/software/gsl</p>
+
+<p>Sources for libconfig: http://www.hyperrealm.com/libconfig</p>
+
+<p>You should be sure that binary libraries and header files from both
+dependencies are properly placed into the util/include and util/lib
+directories.</p></li>
+<li><p>Configure system:</p>
+
+<p>$ nano tidev.cfg</p></li>
+<li><p>Compile:</p>
+
+<p>$ make tidev-resonances.out</p>
+
+<p>If you are using GSL and Libconfig versions compiled from the
+sources in the util directory make using makefile.local instead the
+default makefile:</p>
+
+<p>$ make -f makefile.local tidev-resonances.out</p></li>
+<li><p>Run:</p>
+
+<p>$ ./tidev-resonances.out</p></li>
+</ol>
+
+<p>To know more read the doc/MANUAL.txt.</p>
+
+<h2>For the contirbutor</h2>
+
+<ol>
+<li><p>Generate a public key of your account at the server where you will
+develop contributions:</p>
+
+<p>$ ssh-keygen -t rsa -C "user@email"</p></li>
+<li><p>Upload public key to the github project site
+(https://github.com/facom/tidev).  You will need access to the
+account where the repository was created.</p></li>
+<li><p>Configure git:</p>
+
+<p>$ git config --global user.name "Your Name"
+$ git config --global user.email "your@email"</p></li>
+<li><p>Get an authorized clone of the master trunk:</p>
+
+<p>$ git clone git@github.com:facom/tidev.git</p></li>
+</ol>
+
+<h2>License</h2>
+
+<p>This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or (at
+your option) any later version.</p>
+
+<p>This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.</p>
+
+<p>You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+02110-1301, USA.</p>
+
+<p>Copyright (C) 2013 Jorge I. Zuluaga, Mario Melita, Pablo Cuartas,
+Bayron Portilla</p>
+
+<hr />
+
+<p>This file has been format using
+<a href="http://daringfireball.net/projects/markdown">Markdown</a>.</p>

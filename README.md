@@ -50,7 +50,7 @@ Quick start
 
     $ ./tidev-resonances.out
 
-To know more read the doc/MANUAL.txt.
+To know more read the MANUAL.md(html).
 
 For the contirbutor
 -------------------
