@@ -108,7 +108,7 @@ int main(int argc,char *argv[])
 
   //Integrate!
   file fl=fopen(outputFile,"w");
-  TINI=T1=Tiempo();
+  TINI=T1=Time();
   for(tstep=0;tstep<tend;tstep+=dtstep){
 
     //STEP
@@ -127,7 +127,7 @@ int main(int argc,char *argv[])
 
     //STORE IN OUTPUT FILE
     if(fmod(tstep,dtscreen)<1E-5){
-      T2=Tiempo();
+      T2=Time();
       TIME=(T2-T1)*1E-6;
       printf("t=%e, y[0]=%e, y[1]/n=%e, y[2]=%e, y[3]=%e, y[4]=%e, time = %e sec\n",
 	     t,y[0],y[1]/Bodies[IBody].n,Etid,y[3],y[4],TIME);
@@ -135,11 +135,11 @@ int main(int argc,char *argv[])
 	TAVG+=TIME;
 	NT++;
       }
-      T1=Tiempo();
+      T1=Time();
     }
 
   }
-  TEND=Tiempo();
+  TEND=Time();
   TAVG/=NT;
   printf("Average time: %e secs\n",TAVG);
   printf("Total time: %e secs\n",(TEND-TINI)*1E-6);

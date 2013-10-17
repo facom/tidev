@@ -200,7 +200,7 @@ int configLoad(const char* file)
 /* ----------------------------------------------------------------------
 TIME ROUTINE
 ---------------------------------------------------------------------- */
-double Tiempo(void)
+double Time(void)
 {
   double t;
   struct timeval tiempo;
