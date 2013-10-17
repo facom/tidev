@@ -11,13 +11,15 @@ Quick start
 
    NOTE: You can get an anonymous clone of the project using:
 
-      	 git clone git://github.com/facom/tidev.git
+   ------------------------------------
+   git clone git://github.com/facom/tidev.git
+   ------------------------------------
 
    Then you will be able to get updates using 'git pull'.
 
 2. Install dependencies:
 
-   	 '$ sudo apt-get install libgsl0-dev libgsl0ldbl'
+      	 $ sudo apt-get install libgsl0-dev libgsl0ldbl
 
 	 $ sudo apt-get install libconfig++8 libconfig++-dev
 
