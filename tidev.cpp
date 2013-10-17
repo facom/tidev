@@ -198,6 +198,18 @@ int configLoad(const char* file)
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
 /* ----------------------------------------------------------------------
+TIME ROUTINE
+---------------------------------------------------------------------- */
+double Tiempo(void)
+{
+  double t;
+  struct timeval tiempo;
+  gettimeofday(&tiempo,NULL);
+  t=1e6*tiempo.tv_sec+tiempo.tv_usec;
+  return t;
+}
+
+/* ----------------------------------------------------------------------
 SGN FUNCTION
 ---------------------------------------------------------------------- */
 template <typename T> 
@@ -475,11 +487,3 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
 
 }
 
-double Tiempo(void)
-{
-  double t;
-  struct timeval tiempo;
-  gettimeofday(&tiempo,NULL);
-  t=1e6*tiempo.tv_sec+tiempo.tv_usec;
-  return t;
-}
