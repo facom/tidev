@@ -10,7 +10,8 @@ Quick start
 1. Get a copy of tidev from https://github.com/facom/tidev:
 
    NOTE: You can get an anonymous clone of the project using:
-   	 `$ git clone git://github.com/facom/tidev.git`
+
+       `$ git clone git://github.com/facom/tidev.git`
 
    Then you will be able to get updates using 'git pull'.
 
