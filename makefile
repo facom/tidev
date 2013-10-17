@@ -25,7 +25,7 @@ EDITOR=emacs -nw
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	rm -rf *.o *.exe *.out *~
+	rm -rf *.o *.exe *.out *~ \#*
 	find . -name *~ -exec rm -rf {} \;
 
 cleanall:clean
