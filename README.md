@@ -15,18 +15,22 @@ Quick start
 
    Then you will be able to get updates using 'git pull'.
 
-2. Compile utilities:
+2. Install dependencies:
 
-      make utilbuild
+    $ sudo apt-get install libgsl0-dev libgsl0ldbl
+    $ sudo apt-get install libconfig++8 libconfig++-dev
 
-3. Copy an example and prepare a run:
+3. Configure system:
 
-      cp -rf examples/*.config .
-      make prepare
+    $ nano tidev.cfg
 
-4. Launch the run:
+4. Compile:
 
-      make go
+    $ make tidev-resonances.out
+
+4. Run:
+
+    $ ./tidev-resonances.out
 
 To know more read the doc/MANUAL.txt.
 
