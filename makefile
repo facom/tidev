@@ -6,15 +6,14 @@
 # /_/ /_/\__,_/_____/ |___/  
 # Tidal Spin Evolution
 #######################################################################
-# Copyright (C) 2012 
-# Mario Melita (melita@iafe.uba.ar), Pablo Cuartas (quarktas@gmail.com)
-# Jorge Zuluaga (zuluagajorge@gmail.com
+# Copyright (C) 2013 
+# Jorge Zuluaga (zuluagajorge@gmail.com, Mario Melita (melita@iafe.uba.ar)
+# Pablo Cuartas (quarktas@gmail.com), Bayron Portilla (bayron@gmail.com)
 #######################################################################
 # MASTER MAKEFILE
 #######################################################################
 CC=g++
 OPTIM=-O4
-#OPTIM=-g
 CFLAGS=$(OPTIM) -c -I. $(OPTIONS)
 LFLAGS=$(OPTIM) -lm -lgsl -lgslcblas -lconfig++
 
@@ -30,7 +29,3 @@ clean:
 
 cleanall:clean
 	rm -rf *.dat
-
-
-#CFLAGS=$(OPTIM) -c -I. -Iutil/include $(OPTIONS)
-#LFLAGS=$(OPTIM) -lm util/lib/libgsl.a util/lib/libgslcblas.a -lconfig++
