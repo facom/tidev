@@ -29,3 +29,7 @@ clean:
 
 cleanall:clean
 	rm -rf *.dat
+
+commit:
+	git commit -am "Commit"
+	git push origin maste
