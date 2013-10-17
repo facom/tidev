@@ -16,6 +16,7 @@ CC=g++
 OPTIM=-O4
 CFLAGS=$(OPTIM) -c -I. $(OPTIONS)
 LFLAGS=$(OPTIM) -lm -lgsl -lgslcblas -lconfig++
+EDITOR=emacs -nw
 
 %.out:%.o
 	$(CC) $(LFLAGS) $^ -o $@
@@ -29,6 +30,9 @@ clean:
 
 cleanall:clean
 	rm -rf *.dat
+
+edit: 
+	emacs -nw *.md TODO makefile* *.cpp *.cfg
 
 commit:
 	git commit -am "Commit"

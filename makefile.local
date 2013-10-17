@@ -6,9 +6,9 @@
 # /_/ /_/\__,_/_____/ |___/  
 # Tidal Spin Evolution
 #######################################################################
-# Copyright (C) 2012 
-# Mario Melita (melita@iafe.uba.ar), Pablo Cuartas (quarktas@gmail.com)
-# Jorge Zuluaga (zuluagajorge@gmail.com
+# Copyright (C) 2013 
+# Jorge Zuluaga (zuluagajorge@gmail.com, Mario Melita (melita@iafe.uba.ar)
+# Pablo Cuartas (quarktas@gmail.com), Bayron Portilla (bayron@gmail.com)
 #######################################################################
 # MASTER MAKEFILE
 #######################################################################
@@ -17,6 +17,7 @@ OPTIM=-O4
 #OPTIM=-g
 CFLAGS=$(OPTIM) -c -I. -Iutil/include $(OPTIONS)
 LFLAGS=$(OPTIM) -lm util/lib/libgsl.a util/lib/libgslcblas.a util/lib/libconfig++.a
+EDITOR=emacs -nw
 
 %.out:%.o
 	$(CC) $^ $(LFLAGS) -o $@
@@ -31,6 +32,9 @@ clean:
 cleanall:clean
 	rm -rf *.dat
 
+edit: 
+	emacs -nw *.md TODO makefile* *.cpp *.cfg
 
-#CFLAGS=$(OPTIM) -c -I. -Iutil/include $(OPTIONS)
-#LFLAGS=$(OPTIM) -lm util/lib/libgsl.a util/lib/libgslcblas.a -lconfig++
+commit:
+	git commit -am "Commit"
+	git push origin master
