@@ -18,6 +18,7 @@ Quick start
 2. Install dependencies:
 
     $ sudo apt-get install libgsl0-dev libgsl0ldbl
+
     $ sudo apt-get install libconfig++8 libconfig++-dev
 
 3. Configure system:
