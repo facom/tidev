@@ -36,4 +36,4 @@ edit:
 
 commit:
 	git commit -am "Commit"
-	git push origin master
+	git push
