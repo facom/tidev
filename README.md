@@ -21,6 +21,17 @@ Quick start
 
     $ sudo apt-get install libconfig++8 libconfig++-dev
 
+   If dependencies installation does not work properly you can
+   download sources and compile them directly into the util directory.
+
+   Sources for gsl: http://www.gnu.org/software/gsl
+   
+   Sources for libconfig: http://www.hyperrealm.com/libconfig
+
+   You should be sure that binary libraries and header files from both
+   dependencies are properly placed into the util/include and util/lib
+   directories.
+
 3. Configure system:
 
     $ nano tidev.cfg
@@ -28,6 +39,12 @@ Quick start
 4. Compile:
 
     $ make tidev-resonances.out
+
+   If you are using GSL and Libconfig versions compiled from the
+   sources in the util directory make using makefile.local instead the
+   default makefile:
+   
+    $ make -f makefile.local tidev-resonances.out
 
 4. Run:
 
@@ -77,3 +94,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 Copyright (C) 2013 Jorge I. Zuluaga, Mario Melita, Pablo Cuartas,
 Bayron Portilla
 
+---------------------
+
+This file has been format using Markdown. 
