@@ -33,7 +33,7 @@
 #include <gsl/gsl_const_cgsm.h>
 #include <gsl/gsl_const_num.h>
 #include <gsl/gsl_sf.h>
-
+#include <gsl/gsl_integration.h>
 #include <gsl/gsl_odeiv2.h>
 
 //LIBCONFIG
@@ -417,7 +417,7 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
   dydt[0]=y[1];
   
   ////////////////////////////////
-  //d omega / dt:
+  //Torques
   ////////////////////////////////
   //Tidal torque
   tauTidal=0;
@@ -459,7 +459,9 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
   TauTriax=tauTriaxial/b.C;
   
   
-  //Total acceleration
+  ////////////////////////////////
+  //d omega / dt = Torque
+  ////////////////////////////////
   dydt[1]=(tauTidal+tauTriaxial)/b.C;
 
   ////////////////////////////////

@@ -1,5 +1,10 @@
 #include <tidev.cpp>
 
+//#define METHOD gsl_odeiv2_step_rk8pd
+//#define METHOD gsl_odeiv2_step_rk2
+#define METHOD gsl_odeiv2_step_rk4
+
+
 #define OPTIONS "c:o:"
 const char* Usage=
   MULTI(
@@ -83,11 +88,8 @@ int main(int argc,char *argv[])
   ////////////////////////////////////////////////////////////////////////
   //Variables (5): theta,omega,E,a,e
   gsl_odeiv2_system sys={tidalAcceleration,NULL,5,NULL};
-  //#define t gsl_odeiv2_step_rk8pd
-  //#define t gsl_odeiv2_step_rk2
-  #define t gsl_odeiv2_step_rk4
   gsl_odeiv2_driver* driver=
-    gsl_odeiv2_driver_alloc_y_new(&sys,t,
+    gsl_odeiv2_driver_alloc_y_new(&sys,METHOD,
 				  dt,0,1E-5);
   
   ////////////////////////////////////////////////////////////////////////
