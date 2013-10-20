@@ -81,6 +81,7 @@ typedef FILE* file;
 //#define PI M_PIl
 #define PI M_PI
 #define PI2 (PI*PI)
+#define D2R PI/180
 
 //BEHAVIOR
 #define NMAX 50
@@ -104,7 +105,7 @@ typedef FILE* file;
 ////////////////////////////////////////////////////////////////////////
 int Option;
 class Config CFG;
-int NBodies,IBody;
+int NBodies,NPlanets,IBody;
 real UL,UM,UT,GPROG;
 real Gecc[11];
 real TauTidal,TauTriax;
@@ -131,6 +132,7 @@ public:
   real mu;
   real a,e;
   real n,P;
+  real i,xi,Om,w;
   real gmt;//1.5*G*Ms^2*R^5/(a^6)
 
   //Momentum of Inertia: C: main, A,B: secondary
@@ -200,8 +202,29 @@ int configLoad(const char* file)
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
 /* ----------------------------------------------------------------------
+PRINT VECTOR
+---------------------------------------------------------------------- */
+void fprintf_vec(FILE* stream,const char* fmt,const double x[],int end,int ini=0)
+{
+  for(int i=ini;i<end;i++){
+    fprintf(stream,fmt,x[i]);
+  }
+  fprintf(stream,"\n");
+}
+
+/* ----------------------------------------------------------------------
 TIME ROUTINE
 ---------------------------------------------------------------------- */
+double** matrixAlloc(int n,int m)
+{
+  int i;
+  double **M;
+  M=(double**)calloc(n,sizeof(double*));
+  for(i=0;i<n;i++)
+    M[i]=(double*)calloc(m,sizeof(double));
+  return M;
+}
+
 double Time(void)
 {
   double t;
@@ -240,6 +263,7 @@ int readBodies(void)
   configList(bodies,"bodies");
 
   NBodies=bodies.getLength();
+  NPlanets=NBodies-1;
   IBody=1;//Object by default
 
   for(int i=0;i<NBodies;i++){
@@ -252,6 +276,10 @@ int readBodies(void)
 
     configValueList(bodies[i],Bodies[i].a,"a");
     configValueList(bodies[i],Bodies[i].e,"e");
+    configValueList(bodies[i],Bodies[i].i,"i");
+    configValueList(bodies[i],Bodies[i].xi,"xi");
+    configValueList(bodies[i],Bodies[i].Om,"Om");
+    configValueList(bodies[i],Bodies[i].w,"w");
 
     configValueList(bodies[i],Bodies[i].MoI,"MoI");
     configValueList(bodies[i],Bodies[i].BmA,"BmA");
@@ -284,7 +312,8 @@ int readBodies(void)
     Verbose("\t\talpha = %e, Gamma(1+alpha) = %e\n",b.alpha,b.gapo);
     Verbose("\tInertia moment: I = (%e,%e,%e)\n",b.A,b.B,b.C);
     Verbose("\t\tgmt = %e\n",b.gmt);
-    Verbose("\tOrbital basic: mu=%e, a = %e, e = %e\n",b.mu,b.a,b.e);
+    Verbose("\tOrbital basic: mu=%e, a = %e, e = %e, i = %f deg, xi = %f deg, Om = %f deg, w = %f deg\n",
+	    b.mu,b.a,b.e,b.i,b.xi,b.Om,b.w);
     Verbose("\tOrbital derived: n = %e, P = %e\n",b.n,b.P);
   }
   #endif
@@ -491,3 +520,660 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
 
 }
 
+////////////////////////////////////////////////////////////////////////
+//LAPLACE COEFFICIENTS
+////////////////////////////////////////////////////////////////////////
+#define JEFF(j) ((int)(j+4))
+#define SEFF(s) ((int)(s-0.5))
+double coefLaplace(double th,void *param)
+{
+  double* ps=(double*) param;
+  double j=ps[0];
+  double s=ps[1];
+  double alpha=ps[2];
+
+  double f=(1/pow((1.0-2.0*alpha*cos(th)+alpha*alpha),s))*cos(j*th);
+  
+  return f;
+}
+class LaplaceCoefficients
+{
+public:
+  double Alpha;
+  double time;
+  gsl_matrix **Bjs;
+  gsl_integration_workspace* IntWork;
+  gsl_function Func;
+  double Laplparam[3];
+  
+  double df;
+  double df0;
+  double df1, df2, df3, df4;
+  double df01, df02;
+  double df20, df22;
+  double df10, df11, df12;
+  double df13, df14;
+  double df31, df32, df31b, df32b;
+  double df100, df101, df102, df103, df104;
+
+  int set(double alpha)
+  {
+    Alpha=alpha;
+    #ifdef VERBOSE
+    Verbose("Initial alpha:%e\n",Alpha);
+    #endif
+    Bjs=(gsl_matrix**)calloc(5,sizeof(gsl_matrix*));
+    IntWork=gsl_integration_workspace_alloc(1000);
+    Func.function=&coefLaplace;
+    Func.params=&Laplparam;
+    update(alpha);
+    return 0;
+  }
+
+  int update(double alpha)
+  {
+    Alpha=alpha;
+    for(int i=0;i<=4;i++){
+      Bjs[i]=gsl_matrix_alloc(11,11);
+      gsl_matrix_set_all(Bjs[i],2E100);
+    }
+  }
+
+  double Bsget(int order,int j,double s)
+  {
+    return gsl_matrix_get(Bjs[order],JEFF(j),SEFF(s));
+  }
+
+  double Bsset(int order,int j,double s,double f)
+  {
+    gsl_matrix_set(Bjs[order],JEFF(j),SEFF(s),f);
+  }
+
+
+  double bsget(int order,int j,double s,double alpha)
+  {
+    double f;
+    f=Bsget(order,j,s);
+    f>1E100&&bsfunc(order,j,s,alpha,&f);
+    return f;
+  }
+
+  int bsfunc(int order,int j,double s,double alpha,double *f)        
+  {
+    switch(order){
+    case 0:{
+      double integral,error;
+      Laplparam[0]=j;
+      Laplparam[1]=s;
+      Laplparam[2]=alpha;
+      gsl_integration_qags(&Func,0.0,PI,0.0,1E-6,1000,IntWork,&integral,&error);
+      *f=(2/PI)*integral;
+      break;
+    }
+    case 1:{
+      double f1,f2,f3;
+      f1=bsget(0,j,s+1.0,alpha);
+      f2=bsget(0,j-1.0,s+1.0,alpha);
+      f3=bsget(0,j+1.0,s+1.0,alpha);
+      *f=s*(f2-2.0*alpha*f1+f3);
+      break;
+    }
+    case 2:{
+      double f0=bsget(0,j,s+1.0,alpha);
+      double f1=bsget(1,j,s+1.0,alpha);
+      double f2=bsget(1,j-1.0,s+1.0,alpha);
+      double f3=bsget(1,j+1.0,s+1.0,alpha);
+      *f=s*(f2-2.0*alpha*f1-2.0*f0+f3);
+      break;
+    }
+    case 3:{
+      double f0=bsget(1,j,s+1.0,alpha);
+      double f1=bsget(2,j,s+1.0,alpha);
+      double f2=bsget(2,j-1.0,s+1.0,alpha);
+      double f3=bsget(2,j+1.0,s+1.0,alpha);
+      *f=s*(f2-4.0*f0-2.0*alpha*f1+f3);
+      break;
+    }
+    case 4:{
+      double f0=bsget(2,j,s+1.0,alpha);
+      double f1=bsget(3,j,s+1.0,alpha);
+      double f2=bsget(3,j-1.0,s+1.0,alpha);
+      double f3=bsget(3,j+1.0,s+1.0,alpha);
+      *f=s*(f2-6.0*f0-2.0*alpha*f1+f3);
+      break;
+    }
+    }
+    Bsset(order,j,s,*f);
+  }
+
+  void coefcs()
+  {
+    double t1,t2;
+    double alpha=Alpha;
+
+    t1=Time();
+    df=bsget(0,0.0,0.5,alpha);
+    df0=bsget(0,1.0,1.5,alpha);
+    df01=bsget(1,1.0,1.5,alpha);
+    df02=bsget(2,1.0,1.5,alpha);
+
+    df1=bsget(1,0.0,0.5,alpha);
+    df2=bsget(2,0.0,0.5,alpha);
+    df3=bsget(3,0.0,0.5,alpha);
+    df4=bsget(4,0.0,0.5,alpha);      
+
+    df20=bsget(0,0.0,2.5,alpha);
+    df22=bsget(0,2.0,2.5,alpha);
+
+    df10=bsget(0,1.0,0.5,alpha);
+    df11=bsget(1,1.0,0.5,alpha); 
+    df12=bsget(2,1.0,0.5,alpha);
+    df13=bsget(3,1.0,0.5,alpha);
+    df14=bsget(4,1.0,0.5,alpha);
+    
+    df31=bsget(1,0.0,1.5,alpha);
+    df32=bsget(2,0.0,1.5,alpha);
+    df31b=bsget(1,2.0,1.5,alpha);
+    df32b=bsget(2,2.0,1.5,alpha);
+    
+    df100=bsget(0,2.0,0.5,alpha);
+    df101=bsget(1,2.0,0.5,alpha);
+    df102=bsget(2,2.0,0.5,alpha);
+    df103=bsget(3,2.0,0.5,alpha);
+    df104=bsget(4,2.0,0.5,alpha);
+
+    t2=Time();
+    time=(t2-t1)*1E-6;
+
+    #ifdef VERBOSE
+    Verbose("Alpha = %e\n",alpha);
+    Verbose("df,df0,df01,df02 = %e %e %e %e\n",df,df0,df01,df02);
+    Verbose("df1,df2,df3,df4 = %e %e %e %e\n",df1,df2,df3,df4);
+    Verbose("df20,df22 = %e %e\n",df20,df22);
+    Verbose("df10,df11,df12,df13,df14 = %e %e %e %e %e\n",df10,df11,df12,df13,df14);
+    Verbose("df31,df32,df31b,df32b = %e %e %e %e\n",df31,df32,df31b,df32b);
+    Verbose("df100,df101,df102,df103,df104 = %e %e %e %e %e\n",df100,df101,df102,df103,df104);
+    #endif
+
+  }
+};
+
+////////////////////////////////////////////////////////////////////////
+//SECULAR VARIATION OF ELEMENTS
+////////////////////////////////////////////////////////////////////////
+class SecularEvolution
+{
+public:
+  int Npert;
+  double* X;
+  double** Xp;
+  LaplaceCoefficients *Laplaces;
+  LaplaceCoefficients *laplace;
+
+  int set(int npert,double *x,double** xps,LaplaceCoefficients* ls)
+  {
+    Npert=npert;
+    X=x;
+    Xp=xps;
+    Laplaces=ls;
+
+    #ifdef VERBOSE
+    Verbose("\tSecular evolution properties:\n");
+    Verbose("\tInitial elements: ");
+    fprintf_vec(stdout,"%e ",X,5);
+    Verbose("\tNumber of perturbers: %d\n",Npert);
+    for(int i=0;i<Npert;i++){
+      Verbose("\t\tPerturber %d:\n",i);
+      Verbose("\t\t\tElements:");
+      fprintf_vec(stdout,"%e ",Xp[i],6);
+      Verbose("\t\t\tLaplace: %e, %e, ...\n",
+	      Laplaces[i].df,Laplaces[i].df0,Laplaces[i].df1
+	      );
+    }
+    #endif
+    return 0;
+  }
+
+  double f2(double alpha){
+    return alpha*laplace->df0/8.0;
+  }
+
+  double f3(double alpha){
+    return -0.5*alpha*laplace->df0;
+  }
+
+  double f4(double alpha){
+    return (4.0*(alpha*alpha*alpha)*laplace->df3 + (alpha*alpha*alpha*alpha)*laplace->df4)/128.0;
+  }
+
+  double f5(double alpha){
+    return (4.0*alpha*laplace->df1 + 14.0*(alpha*alpha)*laplace->df2 +
+	    8.0*(alpha*alpha*alpha)*laplace->df3 + (alpha*alpha*alpha*alpha)*laplace->df4)/32.0;
+  }
+
+  double f6(double alpha){
+    return (24.0*alpha*laplace->df1 + 36.0*(alpha*alpha)*laplace->df2 +
+	    12.0*(alpha*alpha*alpha)*laplace->df3 + (alpha*alpha*alpha*alpha)*laplace->df4)/128.0;
+  }
+
+  double f7(double alpha){
+    return (-2.0*alpha*laplace->df0 - 4.0*(alpha*alpha)*laplace->df01 -
+	    (alpha*alpha*alpha)*laplace->df02)/8.0;
+  }
+
+  double f8(double alpha){
+    return (3.0/8.0)*(alpha*alpha)*laplace->df22 +
+      (3.0/4.0)*(alpha*alpha)*laplace->df20;
+  }
+
+  double f9(double alpha){
+    return 0.5*alpha*laplace->df0 + (3.0/4.0)*(alpha*alpha)*laplace->df22 +
+      (15.0/4.0)*(alpha*alpha)*laplace->df20;
+  }
+
+  double f10(double alpha){
+    return 0.25*(2.0*laplace->df10 - 2.0*alpha*laplace->df11 -
+		 (alpha*alpha)*laplace->df12);
+  }
+
+  double f11(double alpha){
+    return (-4.0*(alpha*alpha)*laplace->df12 - 6.0*(alpha*alpha*alpha)*laplace->df13 -
+	    (alpha*alpha*alpha*alpha)*laplace->df14)/32.0;
+  }
+
+  double f12(double alpha){
+    return (4.0*laplace->df10 - 4.0*alpha*laplace->df11 - 22.0*(alpha*alpha)*laplace->df12 -
+	    10.0*(alpha*alpha*alpha)*laplace->df13 - (alpha*alpha*alpha*alpha)*laplace->df14)/32.0;
+  }
+
+  double f13(double alpha){
+    return 0.5*(alpha*alpha)*(laplace->df31 + laplace->df31b) +
+      (alpha*alpha*alpha)*(laplace->df32 + laplace->df32b)/8.0;
+  }
+
+  double f14(double alpha){
+    return alpha*laplace->df0;
+  }
+
+  double f15(double alpha){
+    return 0.5*alpha*laplace->df0 + (alpha*alpha)*laplace->df01 +
+      0.25*(alpha*alpha*alpha)*laplace->df02;
+  }
+
+  double f16(double alpha){
+    return -0.5*alpha*laplace->df0 - 3.0*(alpha*alpha)*laplace->df20 -
+      1.5*(alpha*alpha)*laplace->df22;
+  }
+
+  double f17(double alpha){
+    return (12.0*laplace->df100 - 12.0*alpha*laplace->df101 + 
+	    6.0*(alpha*alpha)*laplace->df102 +
+	    8.0*(alpha*alpha*alpha)*laplace->df103 + (alpha*alpha*alpha*alpha)*laplace->df104)/64.0;
+  }
+
+  double f18(double alpha){
+    return 0.75*alpha*laplace->df0 + 0.5*(alpha*alpha)*laplace->df01 +
+      (alpha*alpha*alpha)*laplace->df02/16.0;
+  }
+
+  double f19(double alpha){
+    return -0.5*(alpha*alpha)*laplace->df31 - (alpha*alpha*alpha)*laplace->df32/8.0;
+  }
+
+  double f20(double alpha){
+    return (alpha*alpha*alpha)*laplace->df02/16.0;
+  }
+
+  double f21(double alpha){
+    return -1.5*alpha*laplace->df0 - (alpha*alpha)*laplace->df01 -
+      (alpha*alpha*alpha)*laplace->df02/8.0;
+  }
+
+  double f22(double alpha){
+    return -(alpha*alpha)*laplace->df31 - (alpha*alpha*alpha)*laplace->df32/4.0;
+  }
+
+  double f23(double alpha){
+    return -(alpha*alpha )*laplace->df31b - (alpha*alpha*alpha)*laplace->df32b/4.0;
+  }
+
+  double f24(double alpha){
+    return (alpha*alpha)*laplace->df31 + (alpha*alpha*alpha)*laplace->df32/4.0;
+  }
+
+  double f25(double alpha){
+    return - (alpha*alpha*alpha)*laplace->df02/8.0;
+  }
+
+  double f26(double alpha){
+    return 0.5*alpha*laplace->df0 + 0.75*(alpha*alpha)*laplace->df20 +
+      1.5*(alpha*alpha)*laplace->df22;
+  }
+
+  int secular(double *dxdt)
+  {
+    /*
+    //Pert. INTERNA O EXTERNA 
+    //d/dt de e, i, \varpi, \Omega 
+    //4o orden en e / si = sin((1/2)*xi)           
+    */
+    double a,e,xi,Om,w;
+    a=X[0];
+    e=X[1];
+    xi=X[2];
+    Om=X[3];
+    w=X[4];
+
+    double aM,eM,xiM,OmM,wM,mp;
+    aM=Xp[0][0];
+    eM=Xp[0][1];
+    xiM=Xp[0][2];
+    OmM=Xp[0][3];
+    wM=Xp[0][4];
+    mp=Xp[0][5];
+    laplace=&Laplaces[0];
+
+    double aux = sqrt(1.0-e*e);
+    double si = sin(xi/2.0);
+    double sini = sin(xi);
+    double Omega = sqrt(GPROG*Bodies[0].M/(a*a*a));
+
+    double wp0 = 0.0;
+    double Op0 = 0.0;
+    int nkk = 15;
+    double wp[16],Op[16],xep[16],xip[16],Rcos[16],Rsin[16];
+    for(int kk=1;kk<=nkk;kk++){
+      wp[kk] = 0.0;
+      Op[kk]= 0.0;
+      xep[kk]= 0.0;
+      xip[kk] = 0.0;
+      Rcos[kk] = 0.0;
+      Rsin[kk] = 0.0;
+    }
+
+    double mpla = GPROG*mp;
+    double apla = aM;
+    double epla = eM;
+    double sipla = sin(xiM/2.0);
+
+    double alpha=a<=apla?a/apla:apla/a;
+
+    double Cn = 0.5*mpla*cos(0.5*xi)/(Omega*aux*(a*a)*apla*sin(xi));
+    double Cwe = mpla*aux/(Omega*e*(a*a)*apla);
+    double Cwi = 0.5*tan(0.5*xi)*mpla*cos(0.5*xi)/(Omega*aux*(a*a)*apla);
+    double Ce = -aux*mpla/(Omega*(a*a)*e*apla);
+    double Ciw = -tan(0.5*xi)*mpla/(Omega*(a*a)*aux*apla);
+    double Cin = -mpla/(Omega*(a*a)*aux*sin(xi)*apla);
+
+    double nodo_pla = OmM;
+    double w_pla = wM;
+    double nodo = Om;
+
+    /*      
+       c*******************************************************************      
+       c    dR_D/de, dR_D/dw, dR_D/ds, dR_D/dOm:
+       c*******************************************************************
+       c    Terminos que NO dependen de cada resonancia:
+    */
+    double dc0 = 2.0*si*f3(alpha)+2.0*si*(epla*epla+e*e)*f7(alpha)+
+      4.0*(si*si*si)*f8(alpha)+2.0*si*(sipla*sipla)*f9(alpha);
+    double c0 = 2.0*e*f2(alpha)+2.0*e*(epla*epla)*f5(alpha)+
+      4.0*(e*e*e)*f4(alpha)+2.0*e*(sipla*sipla+si*si)*f7(alpha); 
+    wp0 = Cwe*c0+Cwi*dc0;
+    Op0 = Cn*dc0;
+
+    /*
+      c*******************************************************************      
+      c    Terminos que dependen de cada resonancia:
+      c*******************************************************************      
+    */
+    double c1 = epla*f10(alpha) + 3.*(e*e)*epla*f11(alpha) +
+      (epla*epla*epla)*f12(alpha) +
+      epla*(si*si + sipla*sipla)*f13(alpha);
+    
+    double dc1 = 2.0*si*e*epla*f13(alpha);
+
+    wp[1]  = Cwe*c1 + Cwi*dc1;
+    Rcos[1] = cos( w_pla - w );
+
+    double a1 = e*epla*f10(alpha) + (e*e*e)*epla*f11(alpha) +
+      (epla*epla*epla)*e*f12(alpha) +
+      (si*si + sipla*sipla)*e*epla*f13(alpha);
+
+    xep[1] = Ce*a1;
+    Rsin[1] = sin( w_pla - w );
+    Op[1]  = Cn*dc1;
+    xip[1] = Ciw*a1;
+
+    /*
+      c*******************************************************************      
+      c    3. nodo_pla - nodo
+      c*******************************************************************      
+    */
+    double c2 = 2.0*e*si*sipla*f15(alpha);
+    double dc2  = sipla*f14(alpha) +
+      sipla*(epla*epla + e*e)*f15(alpha) +
+      (sipla*sipla*sipla)*f16(alpha) + 3.0*(si*si)*sipla*f16(alpha);
+  
+    wp[2] = Cwe*c2 + Cwi*dc2;
+    Rcos[2] = cos( nodo_pla - nodo ) ;
+    Op[2]  = Cn*dc2;
+
+    double a2 = si*sipla*f14(alpha) + 
+      (epla*epla + e*e)*si*sipla*f15(alpha) +
+      (sipla*sipla + si*si)*si*sipla*f16(alpha);
+
+    xip[2] = Cin*a2;
+    
+    /*
+      c*******************************************************************      
+      c    4. 2 ( w_pla - w )       
+      c*******************************************************************      
+    */
+    double c3 = 2.0*(epla*epla)*e*f17(alpha);
+    wp[3]  = Cwe*c3;
+    Rcos[3] = cos(2.*( w_pla - w) );
+    double a3 = (epla*epla)*(e*e)*f17(alpha);
+    xep[3] = 2.0*Ce*a3;
+    Rsin[3] = sin( 2.0*(w_pla - w) );
+    xip[3] = 2.*Ciw*a3;
+
+    /*
+      c*******************************************************************      
+      c    5. 2 ( w - nodo )
+      c*******************************************************************      
+    */
+    double c4 = 2.0*e*(si*si)*f18(alpha);
+    double dc4 = 2.0*si*(e*e)*f18(alpha);
+    wp[4]  = Cwe*c4 + Cwi*dc4;
+    Rcos[4] = cos( 2.*( w - nodo ) );
+    double a4 = (e*e)*(si*si)*f18(alpha);
+    xep[4] = -2.0*Ce*a4;
+    Rsin[4] = sin( 2.*( w - nodo ) );
+    Op[4]  = Cn*dc4;
+    xip[4] = 2.*(Cin - Ciw)*a4;
+
+    /*
+      c*******************************************************************      
+      c    6. w + w_pla - 2*nodo
+      c*******************************************************************      
+    */
+    double c5 = epla*(si*si)*f19(alpha);
+    double dc5 = 2.0*e*epla*si*f19(alpha);
+    wp[5]  = Cwe*c5 + Cwi*dc5;
+    Rcos[5] = cos(w + w_pla - 2.*nodo);
+    double a5 = e*epla*(si*si)*f19(alpha);
+    xep[5] = -Ce*a5;
+    Rsin[5] = sin(w + w_pla - 2.*nodo);
+    Op[5]  = Cn*dc5;
+    xip[5] = (2.*Cin - Ciw)*a5;
+
+    /*
+      c*******************************************************************      
+      c    7. 2*(w_pla - nodo)
+      c*******************************************************************      
+    */
+    double dc6 = 2.0*(epla*epla)*si*f20(alpha);
+    wp[6]  = Cwi*dc6;
+    Rcos[6] = cos(2.*(w_pla - nodo));
+    Op[6]  = Cn*dc6;
+    double a6 = (epla*epla)*(si*si)*f20(alpha);
+    xip[6] = 2.*Cin*a6;
+    Rsin[6] = sin(2.*(w_pla - nodo));
+
+    /*
+      c*******************************************************************      
+      c    8. 2*w - nodo_pla - nodo 
+      c*******************************************************************      
+    */
+    double c7 = 2.0*e*si*sipla*f21(alpha);
+    double dc7  = (e*e)*sipla*f21(alpha);
+    wp[7]  = Cwe*c7 + Cwi*dc7;
+    Rcos[7] = cos(2.*w - nodo_pla - nodo);
+    double a7 = (e*e)*si*sipla*f21(alpha);
+    xep[7] = -2.*Ce*a7;
+    Rsin[7] = sin(2.*w - nodo_pla - nodo);
+    Op[7]  = Cn*dc7;
+    xip[7] = (Cin-2.*Ciw)*a7;
+      
+    /*
+      c*******************************************************************      
+      c    9. w_pla - w + nodo - nodo_pla
+      c*******************************************************************      
+    */
+    double c8 = epla*si*sipla*f22(alpha);
+    double dc8 = e*epla*sipla*f22(alpha);
+    wp[8]  = Cwe*c8 + Cwi*dc8 ;
+    Rcos[8] = cos(w_pla - w + nodo - nodo_pla);
+    double a8 = e*epla*si*sipla*f22(alpha);
+    xep[8] = Ce*a8;
+    Rsin[8] = sin(w_pla - w + nodo - nodo_pla);
+    Op[8]  = Cn*dc8;
+    xip[8] = (Ciw - Cin)*a8;
+
+    /*
+      c*******************************************************************      
+      c    10. w_pla - w - nodo + nodo_pla
+      c*******************************************************************      
+    */
+    double c9 = epla*si*sipla*f23(alpha);
+    double dc9 = e*epla*sipla*f23(alpha);
+    wp[9]  = Cwe*c9 + Cwi*dc9;
+    Rcos[9] = cos(w_pla - w - nodo + nodo_pla);
+    double a9 = e*epla*si*sipla*f23(alpha);
+    xep[9] = Ce*a9;
+    Rsin[9] = sin(w_pla - w - nodo + nodo_pla);
+    Op[9]  = Cn*dc9;
+    xip[9] = (Cin + Ciw)*a9;
+
+    /*
+      c*******************************************************************      
+      c    11. w + w_pla - nodo - nodo_pla        
+      c*******************************************************************      
+    */
+    double c10 = epla*si*sipla*f24(alpha);
+    double dc10 = e*epla*sipla*f24(alpha);
+    wp[10]  =  Cwe*c10 + Cwi*dc10;
+    Rcos[10] = cos(w + w_pla - nodo - nodo_pla);
+    double a10 = e*epla*si*sipla*f24(alpha);
+    xep[10] = -Ce*a10;
+    Rsin[10] = sin(w + w_pla - nodo - nodo_pla);
+    Op[10]  = Cn*dc10;
+    xip[10] = (Cin - Ciw)*a10;
+
+    /*
+      c*******************************************************************      
+      c    12. 2 w_pla - nodo_pla - nodo       
+      c*******************************************************************      
+    */
+    double dc11 = (epla*epla)*sipla*f25(alpha);
+    wp[11] = Cwi*dc11;
+    Rcos[11] = cos(2.*w_pla - nodo_pla - nodo);
+    Op[11]  = Cn*dc11;
+    double a11 = (epla*epla)*si*sipla*f25(alpha);
+    xip[11] = Cin*a11;
+    Rsin[11] = sin(2.*w_pla - nodo_pla - nodo);
+
+    /*
+      c*******************************************************************      
+      c    13. 2 w - 2*nodo_pla
+      c*******************************************************************      
+    */
+    double c12 = 2.0*e*(sipla*sipla)*f18(alpha);
+    wp[12]  =  Cwe*c12;
+    Rcos[12] = cos(2.*w - 2.*nodo_pla);
+    double a12 = (e*e)*(sipla*sipla)*f18(alpha);
+    xep[12] = -2.*Ce*a12;
+    Rsin[12] = sin(2.*w - 2.*nodo_pla);
+    xip[12] = -2.0*Ciw*a12;
+
+    /*
+      c*******************************************************************      
+      c    14. w_pla + w - 2 nodo_pla        
+      c*******************************************************************      
+    */
+    double c13 = epla*(sipla*sipla)*f19(alpha);
+    wp[13]  = Cwe*c13;
+    Rcos[13] = cos(w_pla + w - 2.*nodo_pla);
+    double a13 = e*epla*(sipla*sipla)*f19(alpha);
+    xep[13] = -Ce*a13;
+    Rsin[13] = sin(w_pla + w - 2.*nodo_pla);
+    xip[13] = -Ciw*a13;
+
+    /*
+      c*******************************************************************      
+      c    15. 2 (w_pla - nodo_pla) 
+      c*******************************************************************      
+    */
+
+    /*
+      c*******************************************************************      
+      c    16. 2*(nodo_pla - nodo)
+      c*******************************************************************      
+    */
+    double dc15 = 2.0*si*(sipla*sipla)*f26(alpha);
+    wp[15] = Cwi*dc15;
+    Rcos[15] = cos(2.*(nodo_pla - nodo));
+    Op[15]  = Cn*dc15;
+    double a15 = (si*si)*(sipla*sipla)*f26(alpha);
+    Rsin[15] = sin(2.*(nodo_pla - nodo));
+    xip[15] = 2.0*Cin*a15;
+
+    //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    //CALCULATE INDIVIDUAL CONTRIBUTIONS
+    //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    dxdt[0]=0.0;
+    dxdt[1]=0.0;
+    dxdt[2]=0.0;
+    dxdt[3]=Op0;
+    dxdt[4]=wp0;
+    for(int ikk=1;ikk<=nkk;ikk++){
+      dxdt[1]+=xep[ikk]*Rsin[ikk];
+      dxdt[2]+=xip[ikk]*Rsin[ikk];
+      dxdt[3]+=Op[ikk]*Rcos[ikk];
+      dxdt[4]+=wp[ikk]*Rcos[ikk];
+    }
+    return 0;
+  }
+  
+};
+int secularFunction(double t,const double y[],double yp[],void *param)
+{
+/*
+  SecularEvolution *secev=(SecularEvolution*)param;
+  double a=y[0];
+  double e=y[1];
+  double xi=y[2];
+  double Om=y[3];
+  double w=y[4];
+  double ep,ip,Ompres,wpres;
+  
+  secev->secular(a,e,xi,w,Om,&wpres,&Ompres,&ep,&ip);
+  yp[0]=0.0;
+  yp[1]=ep;
+  yp[2]=ip;
+  yp[3]=Ompres;
+  yp[4]=wpres;
+*/
+  return 0;
+}

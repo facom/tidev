@@ -4,7 +4,6 @@
 //#define METHOD gsl_odeiv2_step_rk2
 #define METHOD gsl_odeiv2_step_rk4
 
-
 #define OPTIONS "c:o:"
 const char* Usage=
   MULTI(
