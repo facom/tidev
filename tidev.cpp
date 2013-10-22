@@ -705,7 +705,7 @@ class SecularEvolution
 {
 public:
   int Npert;
-  double* X;
+  double X[5];
   double** Xp;
   LaplaceCoefficients *Laplaces;
   LaplaceCoefficients *laplace;
@@ -713,7 +713,11 @@ public:
   int set(int npert,double *x,double** xps,LaplaceCoefficients* ls)
   {
     Npert=npert;
-    X=x;
+    X[0]=x[0];
+    X[1]=x[1];
+    X[2]=x[2];
+    X[3]=x[3];
+    X[4]=x[4];
     Xp=xps;
     Laplaces=ls;
 
@@ -734,6 +738,15 @@ public:
     return 0;
   }
 
+  int update(const double *x)
+  {
+    X[0]=x[0];
+    X[1]=x[1];
+    X[2]=x[2];
+    X[3]=x[3];
+    X[4]=x[4];
+  }
+  
   double f2(double alpha){
     return alpha*laplace->df0/8.0;
   }
@@ -858,300 +871,313 @@ public:
     //4o orden en e / si = sin((1/2)*xi)           
     */
     double a,e,xi,Om,w;
+    double aM,eM,xiM,OmM,wM,mp;
+ 
     a=X[0];
     e=X[1];
     xi=X[2];
     Om=X[3];
     w=X[4];
 
-    double aM,eM,xiM,OmM,wM,mp;
-    aM=Xp[0][0];
-    eM=Xp[0][1];
-    xiM=Xp[0][2];
-    OmM=Xp[0][3];
-    wM=Xp[0][4];
-    mp=Xp[0][5];
-    laplace=&Laplaces[0];
+    dxdt[0]=0.0;
+    dxdt[1]=0.0;
+    dxdt[2]=0.0;
+    dxdt[3]=0.0;
+    dxdt[4]=0.0;
 
     double aux = sqrt(1.0-e*e);
     double si = sin(xi/2.0);
     double sini = sin(xi);
     double Omega = sqrt(GPROG*Bodies[0].M/(a*a*a));
 
-    double wp0 = 0.0;
-    double Op0 = 0.0;
-    int nkk = 15;
-    double wp[16],Op[16],xep[16],xip[16],Rcos[16],Rsin[16];
-    for(int kk=1;kk<=nkk;kk++){
-      wp[kk] = 0.0;
-      Op[kk]= 0.0;
-      xep[kk]= 0.0;
-      xip[kk] = 0.0;
-      Rcos[kk] = 0.0;
-      Rsin[kk] = 0.0;
-    }
+    double dxdtp1,dxdtp2,dxdtp3,dxdtp4;
+    for(int ip=0;ip<Npert;ip++){
+      aM=Xp[ip][0];
+      eM=Xp[ip][1];
+      xiM=Xp[ip][2];
+      OmM=Xp[ip][3];
+      wM=Xp[ip][4];
+      mp=Xp[ip][5];
+      laplace=&Laplaces[ip];
 
-    double mpla = GPROG*mp;
-    double apla = aM;
-    double epla = eM;
-    double sipla = sin(xiM/2.0);
+      double wp0 = 0.0;
+      double Op0 = 0.0;
+      int nkk = 15;
+      double wp[16],Op[16],xep[16],xip[16],Rcos[16],Rsin[16];
+      for(int kk=1;kk<=nkk;kk++){
+	wp[kk] = 0.0;
+	Op[kk]= 0.0;
+	xep[kk]= 0.0;
+	xip[kk] = 0.0;
+	Rcos[kk] = 0.0;
+	Rsin[kk] = 0.0;
+      }
 
-    double alpha=a<=apla?a/apla:apla/a;
+      double mpla = GPROG*mp;
+      double apla = aM;
+      double epla = eM;
+      double sipla = sin(xiM/2.0);
 
-    double Cn = 0.5*mpla*cos(0.5*xi)/(Omega*aux*(a*a)*apla*sin(xi));
-    double Cwe = mpla*aux/(Omega*e*(a*a)*apla);
-    double Cwi = 0.5*tan(0.5*xi)*mpla*cos(0.5*xi)/(Omega*aux*(a*a)*apla);
-    double Ce = -aux*mpla/(Omega*(a*a)*e*apla);
-    double Ciw = -tan(0.5*xi)*mpla/(Omega*(a*a)*aux*apla);
-    double Cin = -mpla/(Omega*(a*a)*aux*sin(xi)*apla);
+      double alpha=a<=apla?a/apla:apla/a;
 
-    double nodo_pla = OmM;
-    double w_pla = wM;
-    double nodo = Om;
+      double Cn = 0.5*mpla*cos(0.5*xi)/(Omega*aux*(a*a)*apla*sin(xi));
+      double Cwe = mpla*aux/(Omega*e*(a*a)*apla);
+      double Cwi = 0.5*tan(0.5*xi)*mpla*cos(0.5*xi)/(Omega*aux*(a*a)*apla);
+      double Ce = -aux*mpla/(Omega*(a*a)*e*apla);
+      double Ciw = -tan(0.5*xi)*mpla/(Omega*(a*a)*aux*apla);
+      double Cin = -mpla/(Omega*(a*a)*aux*sin(xi)*apla);
 
-    /*      
-       c*******************************************************************      
-       c    dR_D/de, dR_D/dw, dR_D/ds, dR_D/dOm:
-       c*******************************************************************
-       c    Terminos que NO dependen de cada resonancia:
-    */
-    double dc0 = 2.0*si*f3(alpha)+2.0*si*(epla*epla+e*e)*f7(alpha)+
-      4.0*(si*si*si)*f8(alpha)+2.0*si*(sipla*sipla)*f9(alpha);
-    double c0 = 2.0*e*f2(alpha)+2.0*e*(epla*epla)*f5(alpha)+
-      4.0*(e*e*e)*f4(alpha)+2.0*e*(sipla*sipla+si*si)*f7(alpha); 
-    wp0 = Cwe*c0+Cwi*dc0;
-    Op0 = Cn*dc0;
+      double nodo_pla = OmM;
+      double w_pla = wM;
+      double nodo = Om;
 
-    /*
-      c*******************************************************************      
-      c    Terminos que dependen de cada resonancia:
-      c*******************************************************************      
-    */
-    double c1 = epla*f10(alpha) + 3.*(e*e)*epla*f11(alpha) +
-      (epla*epla*epla)*f12(alpha) +
-      epla*(si*si + sipla*sipla)*f13(alpha);
+      /*      
+	      c*******************************************************************      
+	      c    dR_D/de, dR_D/dw, dR_D/ds, dR_D/dOm:
+	      c*******************************************************************
+	      c    Terminos que NO dependen de cada resonancia:
+      */
+      double dc0 = 2.0*si*f3(alpha)+2.0*si*(epla*epla+e*e)*f7(alpha)+
+	4.0*(si*si*si)*f8(alpha)+2.0*si*(sipla*sipla)*f9(alpha);
+      double c0 = 2.0*e*f2(alpha)+2.0*e*(epla*epla)*f5(alpha)+
+	4.0*(e*e*e)*f4(alpha)+2.0*e*(sipla*sipla+si*si)*f7(alpha); 
+      wp0 = Cwe*c0+Cwi*dc0;
+      Op0 = Cn*dc0;
+
+      /*
+	c*******************************************************************      
+	c    Terminos que dependen de cada resonancia:
+	c*******************************************************************      
+      */
+      double c1 = epla*f10(alpha) + 3.*(e*e)*epla*f11(alpha) +
+	(epla*epla*epla)*f12(alpha) +
+	epla*(si*si + sipla*sipla)*f13(alpha);
     
-    double dc1 = 2.0*si*e*epla*f13(alpha);
+      double dc1 = 2.0*si*e*epla*f13(alpha);
 
-    wp[1]  = Cwe*c1 + Cwi*dc1;
-    Rcos[1] = cos( w_pla - w );
+      wp[1]  = Cwe*c1 + Cwi*dc1;
+      Rcos[1] = cos( w_pla - w );
 
-    double a1 = e*epla*f10(alpha) + (e*e*e)*epla*f11(alpha) +
-      (epla*epla*epla)*e*f12(alpha) +
-      (si*si + sipla*sipla)*e*epla*f13(alpha);
+      double a1 = e*epla*f10(alpha) + (e*e*e)*epla*f11(alpha) +
+	(epla*epla*epla)*e*f12(alpha) +
+	(si*si + sipla*sipla)*e*epla*f13(alpha);
 
-    xep[1] = Ce*a1;
-    Rsin[1] = sin( w_pla - w );
-    Op[1]  = Cn*dc1;
-    xip[1] = Ciw*a1;
+      xep[1] = Ce*a1;
+      Rsin[1] = sin( w_pla - w );
+      Op[1]  = Cn*dc1;
+      xip[1] = Ciw*a1;
 
-    /*
-      c*******************************************************************      
-      c    3. nodo_pla - nodo
-      c*******************************************************************      
-    */
-    double c2 = 2.0*e*si*sipla*f15(alpha);
-    double dc2  = sipla*f14(alpha) +
-      sipla*(epla*epla + e*e)*f15(alpha) +
-      (sipla*sipla*sipla)*f16(alpha) + 3.0*(si*si)*sipla*f16(alpha);
+      /*
+	c*******************************************************************      
+	c    3. nodo_pla - nodo
+	c*******************************************************************      
+      */
+      double c2 = 2.0*e*si*sipla*f15(alpha);
+      double dc2  = sipla*f14(alpha) +
+	sipla*(epla*epla + e*e)*f15(alpha) +
+	(sipla*sipla*sipla)*f16(alpha) + 3.0*(si*si)*sipla*f16(alpha);
   
-    wp[2] = Cwe*c2 + Cwi*dc2;
-    Rcos[2] = cos( nodo_pla - nodo ) ;
-    Op[2]  = Cn*dc2;
+      wp[2] = Cwe*c2 + Cwi*dc2;
+      Rcos[2] = cos( nodo_pla - nodo ) ;
+      Op[2]  = Cn*dc2;
 
-    double a2 = si*sipla*f14(alpha) + 
-      (epla*epla + e*e)*si*sipla*f15(alpha) +
-      (sipla*sipla + si*si)*si*sipla*f16(alpha);
+      double a2 = si*sipla*f14(alpha) + 
+	(epla*epla + e*e)*si*sipla*f15(alpha) +
+	(sipla*sipla + si*si)*si*sipla*f16(alpha);
 
-    xip[2] = Cin*a2;
+      xip[2] = Cin*a2;
     
-    /*
-      c*******************************************************************      
-      c    4. 2 ( w_pla - w )       
-      c*******************************************************************      
-    */
-    double c3 = 2.0*(epla*epla)*e*f17(alpha);
-    wp[3]  = Cwe*c3;
-    Rcos[3] = cos(2.*( w_pla - w) );
-    double a3 = (epla*epla)*(e*e)*f17(alpha);
-    xep[3] = 2.0*Ce*a3;
-    Rsin[3] = sin( 2.0*(w_pla - w) );
-    xip[3] = 2.*Ciw*a3;
+      /*
+	c*******************************************************************      
+	c    4. 2 ( w_pla - w )       
+	c*******************************************************************      
+      */
+      double c3 = 2.0*(epla*epla)*e*f17(alpha);
+      wp[3]  = Cwe*c3;
+      Rcos[3] = cos(2.*( w_pla - w) );
+      double a3 = (epla*epla)*(e*e)*f17(alpha);
+      xep[3] = 2.0*Ce*a3;
+      Rsin[3] = sin( 2.0*(w_pla - w) );
+      xip[3] = 2.*Ciw*a3;
 
-    /*
-      c*******************************************************************      
-      c    5. 2 ( w - nodo )
-      c*******************************************************************      
-    */
-    double c4 = 2.0*e*(si*si)*f18(alpha);
-    double dc4 = 2.0*si*(e*e)*f18(alpha);
-    wp[4]  = Cwe*c4 + Cwi*dc4;
-    Rcos[4] = cos( 2.*( w - nodo ) );
-    double a4 = (e*e)*(si*si)*f18(alpha);
-    xep[4] = -2.0*Ce*a4;
-    Rsin[4] = sin( 2.*( w - nodo ) );
-    Op[4]  = Cn*dc4;
-    xip[4] = 2.*(Cin - Ciw)*a4;
+      /*
+	c*******************************************************************      
+	c    5. 2 ( w - nodo )
+	c*******************************************************************      
+      */
+      double c4 = 2.0*e*(si*si)*f18(alpha);
+      double dc4 = 2.0*si*(e*e)*f18(alpha);
+      wp[4]  = Cwe*c4 + Cwi*dc4;
+      Rcos[4] = cos( 2.*( w - nodo ) );
+      double a4 = (e*e)*(si*si)*f18(alpha);
+      xep[4] = -2.0*Ce*a4;
+      Rsin[4] = sin( 2.*( w - nodo ) );
+      Op[4]  = Cn*dc4;
+      xip[4] = 2.*(Cin - Ciw)*a4;
 
-    /*
-      c*******************************************************************      
-      c    6. w + w_pla - 2*nodo
-      c*******************************************************************      
-    */
-    double c5 = epla*(si*si)*f19(alpha);
-    double dc5 = 2.0*e*epla*si*f19(alpha);
-    wp[5]  = Cwe*c5 + Cwi*dc5;
-    Rcos[5] = cos(w + w_pla - 2.*nodo);
-    double a5 = e*epla*(si*si)*f19(alpha);
-    xep[5] = -Ce*a5;
-    Rsin[5] = sin(w + w_pla - 2.*nodo);
-    Op[5]  = Cn*dc5;
-    xip[5] = (2.*Cin - Ciw)*a5;
+      /*
+	c*******************************************************************      
+	c    6. w + w_pla - 2*nodo
+	c*******************************************************************      
+      */
+      double c5 = epla*(si*si)*f19(alpha);
+      double dc5 = 2.0*e*epla*si*f19(alpha);
+      wp[5]  = Cwe*c5 + Cwi*dc5;
+      Rcos[5] = cos(w + w_pla - 2.*nodo);
+      double a5 = e*epla*(si*si)*f19(alpha);
+      xep[5] = -Ce*a5;
+      Rsin[5] = sin(w + w_pla - 2.*nodo);
+      Op[5]  = Cn*dc5;
+      xip[5] = (2.*Cin - Ciw)*a5;
 
-    /*
-      c*******************************************************************      
-      c    7. 2*(w_pla - nodo)
-      c*******************************************************************      
-    */
-    double dc6 = 2.0*(epla*epla)*si*f20(alpha);
-    wp[6]  = Cwi*dc6;
-    Rcos[6] = cos(2.*(w_pla - nodo));
-    Op[6]  = Cn*dc6;
-    double a6 = (epla*epla)*(si*si)*f20(alpha);
-    xip[6] = 2.*Cin*a6;
-    Rsin[6] = sin(2.*(w_pla - nodo));
+      /*
+	c*******************************************************************      
+	c    7. 2*(w_pla - nodo)
+	c*******************************************************************      
+      */
+      double dc6 = 2.0*(epla*epla)*si*f20(alpha);
+      wp[6]  = Cwi*dc6;
+      Rcos[6] = cos(2.*(w_pla - nodo));
+      Op[6]  = Cn*dc6;
+      double a6 = (epla*epla)*(si*si)*f20(alpha);
+      xip[6] = 2.*Cin*a6;
+      Rsin[6] = sin(2.*(w_pla - nodo));
 
-    /*
-      c*******************************************************************      
-      c    8. 2*w - nodo_pla - nodo 
-      c*******************************************************************      
-    */
-    double c7 = 2.0*e*si*sipla*f21(alpha);
-    double dc7  = (e*e)*sipla*f21(alpha);
-    wp[7]  = Cwe*c7 + Cwi*dc7;
-    Rcos[7] = cos(2.*w - nodo_pla - nodo);
-    double a7 = (e*e)*si*sipla*f21(alpha);
-    xep[7] = -2.*Ce*a7;
-    Rsin[7] = sin(2.*w - nodo_pla - nodo);
-    Op[7]  = Cn*dc7;
-    xip[7] = (Cin-2.*Ciw)*a7;
+      /*
+	c*******************************************************************      
+	c    8. 2*w - nodo_pla - nodo 
+	c*******************************************************************      
+      */
+      double c7 = 2.0*e*si*sipla*f21(alpha);
+      double dc7  = (e*e)*sipla*f21(alpha);
+      wp[7]  = Cwe*c7 + Cwi*dc7;
+      Rcos[7] = cos(2.*w - nodo_pla - nodo);
+      double a7 = (e*e)*si*sipla*f21(alpha);
+      xep[7] = -2.*Ce*a7;
+      Rsin[7] = sin(2.*w - nodo_pla - nodo);
+      Op[7]  = Cn*dc7;
+      xip[7] = (Cin-2.*Ciw)*a7;
       
-    /*
-      c*******************************************************************      
-      c    9. w_pla - w + nodo - nodo_pla
-      c*******************************************************************      
-    */
-    double c8 = epla*si*sipla*f22(alpha);
-    double dc8 = e*epla*sipla*f22(alpha);
-    wp[8]  = Cwe*c8 + Cwi*dc8 ;
-    Rcos[8] = cos(w_pla - w + nodo - nodo_pla);
-    double a8 = e*epla*si*sipla*f22(alpha);
-    xep[8] = Ce*a8;
-    Rsin[8] = sin(w_pla - w + nodo - nodo_pla);
-    Op[8]  = Cn*dc8;
-    xip[8] = (Ciw - Cin)*a8;
+      /*
+	c*******************************************************************      
+	c    9. w_pla - w + nodo - nodo_pla
+	c*******************************************************************      
+      */
+      double c8 = epla*si*sipla*f22(alpha);
+      double dc8 = e*epla*sipla*f22(alpha);
+      wp[8]  = Cwe*c8 + Cwi*dc8 ;
+      Rcos[8] = cos(w_pla - w + nodo - nodo_pla);
+      double a8 = e*epla*si*sipla*f22(alpha);
+      xep[8] = Ce*a8;
+      Rsin[8] = sin(w_pla - w + nodo - nodo_pla);
+      Op[8]  = Cn*dc8;
+      xip[8] = (Ciw - Cin)*a8;
 
-    /*
-      c*******************************************************************      
-      c    10. w_pla - w - nodo + nodo_pla
-      c*******************************************************************      
-    */
-    double c9 = epla*si*sipla*f23(alpha);
-    double dc9 = e*epla*sipla*f23(alpha);
-    wp[9]  = Cwe*c9 + Cwi*dc9;
-    Rcos[9] = cos(w_pla - w - nodo + nodo_pla);
-    double a9 = e*epla*si*sipla*f23(alpha);
-    xep[9] = Ce*a9;
-    Rsin[9] = sin(w_pla - w - nodo + nodo_pla);
-    Op[9]  = Cn*dc9;
-    xip[9] = (Cin + Ciw)*a9;
+      /*
+	c*******************************************************************      
+	c    10. w_pla - w - nodo + nodo_pla
+	c*******************************************************************      
+      */
+      double c9 = epla*si*sipla*f23(alpha);
+      double dc9 = e*epla*sipla*f23(alpha);
+      wp[9]  = Cwe*c9 + Cwi*dc9;
+      Rcos[9] = cos(w_pla - w - nodo + nodo_pla);
+      double a9 = e*epla*si*sipla*f23(alpha);
+      xep[9] = Ce*a9;
+      Rsin[9] = sin(w_pla - w - nodo + nodo_pla);
+      Op[9]  = Cn*dc9;
+      xip[9] = (Cin + Ciw)*a9;
 
-    /*
-      c*******************************************************************      
-      c    11. w + w_pla - nodo - nodo_pla        
-      c*******************************************************************      
-    */
-    double c10 = epla*si*sipla*f24(alpha);
-    double dc10 = e*epla*sipla*f24(alpha);
-    wp[10]  =  Cwe*c10 + Cwi*dc10;
-    Rcos[10] = cos(w + w_pla - nodo - nodo_pla);
-    double a10 = e*epla*si*sipla*f24(alpha);
-    xep[10] = -Ce*a10;
-    Rsin[10] = sin(w + w_pla - nodo - nodo_pla);
-    Op[10]  = Cn*dc10;
-    xip[10] = (Cin - Ciw)*a10;
+      /*
+	c*******************************************************************      
+	c    11. w + w_pla - nodo - nodo_pla        
+	c*******************************************************************      
+      */
+      double c10 = epla*si*sipla*f24(alpha);
+      double dc10 = e*epla*sipla*f24(alpha);
+      wp[10]  =  Cwe*c10 + Cwi*dc10;
+      Rcos[10] = cos(w + w_pla - nodo - nodo_pla);
+      double a10 = e*epla*si*sipla*f24(alpha);
+      xep[10] = -Ce*a10;
+      Rsin[10] = sin(w + w_pla - nodo - nodo_pla);
+      Op[10]  = Cn*dc10;
+      xip[10] = (Cin - Ciw)*a10;
 
-    /*
-      c*******************************************************************      
-      c    12. 2 w_pla - nodo_pla - nodo       
-      c*******************************************************************      
-    */
-    double dc11 = (epla*epla)*sipla*f25(alpha);
-    wp[11] = Cwi*dc11;
-    Rcos[11] = cos(2.*w_pla - nodo_pla - nodo);
-    Op[11]  = Cn*dc11;
-    double a11 = (epla*epla)*si*sipla*f25(alpha);
-    xip[11] = Cin*a11;
-    Rsin[11] = sin(2.*w_pla - nodo_pla - nodo);
+      /*
+	c*******************************************************************      
+	c    12. 2 w_pla - nodo_pla - nodo       
+	c*******************************************************************      
+      */
+      double dc11 = (epla*epla)*sipla*f25(alpha);
+      wp[11] = Cwi*dc11;
+      Rcos[11] = cos(2.*w_pla - nodo_pla - nodo);
+      Op[11]  = Cn*dc11;
+      double a11 = (epla*epla)*si*sipla*f25(alpha);
+      xip[11] = Cin*a11;
+      Rsin[11] = sin(2.*w_pla - nodo_pla - nodo);
 
-    /*
-      c*******************************************************************      
-      c    13. 2 w - 2*nodo_pla
-      c*******************************************************************      
-    */
-    double c12 = 2.0*e*(sipla*sipla)*f18(alpha);
-    wp[12]  =  Cwe*c12;
-    Rcos[12] = cos(2.*w - 2.*nodo_pla);
-    double a12 = (e*e)*(sipla*sipla)*f18(alpha);
-    xep[12] = -2.*Ce*a12;
-    Rsin[12] = sin(2.*w - 2.*nodo_pla);
-    xip[12] = -2.0*Ciw*a12;
+      /*
+	c*******************************************************************      
+	c    13. 2 w - 2*nodo_pla
+	c*******************************************************************      
+      */
+      double c12 = 2.0*e*(sipla*sipla)*f18(alpha);
+      wp[12]  =  Cwe*c12;
+      Rcos[12] = cos(2.*w - 2.*nodo_pla);
+      double a12 = (e*e)*(sipla*sipla)*f18(alpha);
+      xep[12] = -2.*Ce*a12;
+      Rsin[12] = sin(2.*w - 2.*nodo_pla);
+      xip[12] = -2.0*Ciw*a12;
 
-    /*
-      c*******************************************************************      
-      c    14. w_pla + w - 2 nodo_pla        
-      c*******************************************************************      
-    */
-    double c13 = epla*(sipla*sipla)*f19(alpha);
-    wp[13]  = Cwe*c13;
-    Rcos[13] = cos(w_pla + w - 2.*nodo_pla);
-    double a13 = e*epla*(sipla*sipla)*f19(alpha);
-    xep[13] = -Ce*a13;
-    Rsin[13] = sin(w_pla + w - 2.*nodo_pla);
-    xip[13] = -Ciw*a13;
+      /*
+	c*******************************************************************      
+	c    14. w_pla + w - 2 nodo_pla        
+	c*******************************************************************      
+      */
+      double c13 = epla*(sipla*sipla)*f19(alpha);
+      wp[13]  = Cwe*c13;
+      Rcos[13] = cos(w_pla + w - 2.*nodo_pla);
+      double a13 = e*epla*(sipla*sipla)*f19(alpha);
+      xep[13] = -Ce*a13;
+      Rsin[13] = sin(w_pla + w - 2.*nodo_pla);
+      xip[13] = -Ciw*a13;
 
-    /*
-      c*******************************************************************      
-      c    15. 2 (w_pla - nodo_pla) 
-      c*******************************************************************      
-    */
+      /*
+	c*******************************************************************      
+	c    15. 2 (w_pla - nodo_pla) 
+	c*******************************************************************      
+      */
 
-    /*
-      c*******************************************************************      
-      c    16. 2*(nodo_pla - nodo)
-      c*******************************************************************      
-    */
-    double dc15 = 2.0*si*(sipla*sipla)*f26(alpha);
-    wp[15] = Cwi*dc15;
-    Rcos[15] = cos(2.*(nodo_pla - nodo));
-    Op[15]  = Cn*dc15;
-    double a15 = (si*si)*(sipla*sipla)*f26(alpha);
-    Rsin[15] = sin(2.*(nodo_pla - nodo));
-    xip[15] = 2.0*Cin*a15;
+      /*
+	c*******************************************************************      
+	c    16. 2*(nodo_pla - nodo)
+	c*******************************************************************      
+      */
+      double dc15 = 2.0*si*(sipla*sipla)*f26(alpha);
+      wp[15] = Cwi*dc15;
+      Rcos[15] = cos(2.*(nodo_pla - nodo));
+      Op[15]  = Cn*dc15;
+      double a15 = (si*si)*(sipla*sipla)*f26(alpha);
+      Rsin[15] = sin(2.*(nodo_pla - nodo));
+      xip[15] = 2.0*Cin*a15;
 
-    //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    //CALCULATE INDIVIDUAL CONTRIBUTIONS
-    //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    dxdt[0]=0.0;
-    dxdt[1]=0.0;
-    dxdt[2]=0.0;
-    dxdt[3]=Op0;
-    dxdt[4]=wp0;
-    for(int ikk=1;ikk<=nkk;ikk++){
-      dxdt[1]+=xep[ikk]*Rsin[ikk];
-      dxdt[2]+=xip[ikk]*Rsin[ikk];
-      dxdt[3]+=Op[ikk]*Rcos[ikk];
-      dxdt[4]+=wp[ikk]*Rcos[ikk];
+      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+      //CALCULATE INDIVIDUAL CONTRIBUTIONS
+      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+      dxdtp1=0.0;
+      dxdtp2=0.0;
+      dxdtp3=Op0;
+      dxdtp4=wp0;
+      for(int ikk=1;ikk<=nkk;ikk++){
+	dxdtp1+=xep[ikk]*Rsin[ikk];
+	dxdtp2+=xip[ikk]*Rsin[ikk];
+	dxdtp3+=Op[ikk]*Rcos[ikk];
+	dxdtp4+=wp[ikk]*Rcos[ikk];
+      }
+      dxdt[1]+=dxdtp1;
+      dxdt[2]+=dxdtp2;
+      dxdt[3]+=dxdtp3;
+      dxdt[4]+=dxdtp4;
     }
     return 0;
   }
@@ -1159,21 +1185,25 @@ public:
 };
 int secularFunction(double t,const double y[],double yp[],void *param)
 {
-/*
-  SecularEvolution *secev=(SecularEvolution*)param;
-  double a=y[0];
-  double e=y[1];
-  double xi=y[2];
-  double Om=y[3];
-  double w=y[4];
-  double ep,ip,Ompres,wpres;
+  SecularEvolution *plsys=(SecularEvolution*)param;
+
+  /*
+  fprintf(stdout,"t = %e\n",t);
+  fprintf(stdout,"y = ");
+  fprintf_vec(stdout,"%e ",y,5);
+  fprintf(stdout,"X old = ");
+  fprintf_vec(stdout,"%e ",plsys->X,5);
+  */
+
+  plsys->update(y);
+  plsys->secular(yp);
   
-  secev->secular(a,e,xi,w,Om,&wpres,&Ompres,&ep,&ip);
-  yp[0]=0.0;
-  yp[1]=ep;
-  yp[2]=ip;
-  yp[3]=Ompres;
-  yp[4]=wpres;
-*/
+  //fprintf(stdout,"dy/dt = ");
+  //fprintf_vec(stdout,"%e ",yp,5);
+
+  //int pause;
+  //scanf("%d",&pause);
+  //exit(0);
+
   return 0;
 }
