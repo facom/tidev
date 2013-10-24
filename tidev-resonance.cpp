@@ -1,36 +1,14 @@
-#include <tidev.cpp>
+//NUMBER OF VARIABLES
+#define NUMVARS 5 //5 elements + theta + omega + Etid
+#include <tidev-deprec.cpp>
 #define ODEMETHOD gsl_odeiv2_step_rk4
-
-#define OPTIONS "c:o:"
-const char* Usage=
-  MULTI(
-	Usage:\n
-	./tidev-resonance.cpp [-c <configuration-file>] [-o <output-file>]\n
-	\n
-	<configuration-file>: file with parameters.  Default: tidev.cfg\n
-	<output-file>: file for results\n
-	);
 
 int main(int argc,char *argv[])
 {
   ////////////////////////////////////////////////////////////////////////
   //COMMAND LINE OPTIONS
   ////////////////////////////////////////////////////////////////////////
-  const char* configFile="tidev.cfg";
-  const char* outputFile="output.dat";
-  while((Option=getopt(argc,argv,OPTIONS))!=-1){
-    switch(Option){
-    case 'c':
-      configFile=optarg;
-      break;
-    case 'o':
-      outputFile=optarg;
-      break;
-    case '?':
-      fprintf(stderr,"%s",Usage);
-      exit(1);
-    }
-  }
+  char outputFile[100];
 
   ////////////////////////////////////////////////////////////////////////
   //INITIALIZATION
@@ -40,7 +18,7 @@ int main(int argc,char *argv[])
   
   //LOAD CONFIGURATION
   configInit();
-  configLoad(configFile);
+  configLoad("tidev-deprecated.cfg");
 
   ////////////////////////////////////////////////////////////////////////
   //CONFIGURATION PARAMETERS
@@ -84,7 +62,7 @@ int main(int argc,char *argv[])
   //PREPARE INTEGRATOR
   ////////////////////////////////////////////////////////////////////////
   //BODY
-  IBody=1;
+  IBody=2;
 
   //Variables (5): theta,omega,E,a,e
   gsl_odeiv2_system sys={tidalAcceleration,NULL,5,NULL};
@@ -111,7 +89,11 @@ int main(int argc,char *argv[])
   y[4]=Bodies[IBody].e;		//Eccentricity init
 
   //Integrate!
+  
+  sprintf(outputFile,"tidal-%s.dat",STR(Bodies[IBody].name));
   file fl=fopen(outputFile,"w");
+  fprintf(stdout,"Saving results in %s...\n",outputFile);
+
   TINI=T1=Time();
   for(tstep=dtstep;tstep<tend;tstep+=dtstep){
 

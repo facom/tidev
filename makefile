@@ -14,7 +14,7 @@
 #######################################################################
 CC=g++
 OPTIM=-O4
-CFLAGS=$(OPTIM) -c -I. $(OPTIONS)
+CFLAGS=$(OPTIM) -w -c -I. $(OPTIONS)
 LFLAGS=$(OPTIM) -lm -lgsl -lgslcblas -lconfig++
 EDITOR=emacs -nw
 

@@ -1,4 +1,7 @@
-#include <tidev.cpp>
+//NUMBER OF VARIABLES
+#define NUMVARS 5 //5 elements + theta + omega + Etid
+
+#include <tidev-deprec.cpp>
 #define ODEMETHOD gsl_odeiv2_step_rk2
 
 int main(int argc,char *argv[])
@@ -71,14 +74,18 @@ int main(int argc,char *argv[])
   //SELECTING INTERACTING PLANETS
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //1-b,2-c,3-d,4-e,5-f,6-g
+  /*
   int iplanets[]={1,2,3,4,5,6};
   int niplanets=6;
+  */
+  int iplanets[]={1,2};
+  int niplanets=2;
 
   FILE** fl;
   fl=(FILE**)calloc(niplanets,sizeof(FILE*));
   char fname[100];
   for(i=0;i<niplanets;i++){
-    sprintf(fname,"results_%s.dat",STR(Bodies[iplanets[i]].name));
+    sprintf(fname,"orbit_%s.dat",STR(Bodies[iplanets[i]].name));
     fl[i]=fopen(fname,"w");
   }
   //exit(0);
@@ -129,6 +136,7 @@ int main(int argc,char *argv[])
   plsys.set(niplanets,x,Laps);
   plsys.secular(dxdt);
   fprintf_vec(stdout,"%e ",dxdt,5*niplanets);
+  //exit(0);
 
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //INTEGRATE

@@ -15,7 +15,7 @@
 CC=g++
 OPTIM=-O4
 #OPTIM=-g
-CFLAGS=$(OPTIM) -c -I. -Iutil/include $(OPTIONS)
+CFLAGS=$(OPTIM) -w -c -I. -Iutil/include $(OPTIONS)
 LFLAGS=$(OPTIM) -lm util/lib/libgsl.a util/lib/libgslcblas.a util/lib/libconfig++.a
 EDITOR=emacs -nw
 
@@ -29,7 +29,10 @@ clean:
 	rm -rf *.o *.exe *.out *~
 	find . -name *~ -exec rm -rf {} \;
 
-cleanall:clean
+cleanout:
+	rm -rf *.out *.o
+
+cleanall:clean cleanout
 	rm -rf *.dat
 
 edit: 

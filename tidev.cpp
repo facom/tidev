@@ -129,6 +129,7 @@ public:
 
   //Rheological
   real mur,alpha,tauM,tauA;
+  real thetaini,Pini;
   real gapo,cosapt,sinapt;//Alpha functions 
   real A2;//A_2
   
@@ -292,6 +293,9 @@ int readBodies(void)
     configValueList(bodies[i],Bodies[i].alpha,"alpha");
     configValueList(bodies[i],Bodies[i].tauM,"tauM");
     configValueList(bodies[i],Bodies[i].tauA,"tauA");
+
+    configValueList(bodies[i],Bodies[i].thetaini,"thetaini");
+    configValueList(bodies[i],Bodies[i].Pini,"Pini");
     
     //Adjust units
     Bodies[i].setUnits();
@@ -369,6 +373,8 @@ int Body::setUnits(void)
   mur=mur/(UM/(UL*UT*UT));
   tauM*=(YEAR/UT);
   tauA*=(YEAR/UT);
+  thetaini*=(D2R);
+  Pini*=(HOURS/UT);
 }
 
 int setUnits(real ul,real um,real ut,real G)
@@ -427,103 +433,6 @@ real solveKepler(real e,real M)
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 //PHYSICAL
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-int tidalAcceleration(double t,const double y[],double dydt[],params ps)
-{
-  real wterm,w220q,X220q;
-  real tauTerm;
-  real tauTidal,tauTriaxial,dotEtid,dota;
-  Body b=Bodies[IBody];
-  real n=b.n;
-  int l=2,m=2,p=0,q,i;
-  real chitauA;
-  real R,I;
-
-  static int ncall=1;
-
-  #ifdef VERBOSE
-  Verbose("Calling %d to fcn with t=%e, y=(%e,%e,%e)...\n",ncall++,t,y[0],y[1],y[2]);
-  #endif
-  
-  ////////////////////////////////
-  //d theta / dt = omega
-  ////////////////////////////////
-  dydt[0]=y[1];
-  
-  ////////////////////////////////
-  //Torques
-  ////////////////////////////////
-  //Tidal torque
-  tauTidal=0;
-  dotEtid=0;
-  wterm=(l-2*p)*n-m*y[1];
-  for(int q=-2;q<=7;q++){
-    i=q+3;
-    w220q=wterm+q*n;
-    X220q=fabs(w220q);
-    chitauA=PREAL(X220q*b.tauA,b.alpha);
-    R=1+b.gapo*b.cosapt/chitauA;
-    I=-1.0/(X220q*b.tauM)-b.gapo*b.sinapt/chitauA;
-    tauTerm=(-1.5*b.A2*I/((R+b.A2)*(R+b.A2)+I*I));
-    tauTidal+=Gecc[i]*tauTerm*SGN(w220q);
-    dotEtid+=Gecc[i]*tauTerm*X220q;
-    #ifdef VERBOSE
-    Verbose("(%d,%d): %e %e %e %e %e %e %e %e %e\n",
-	   q,i,w220q,b.alpha,b.gapo,R,I,
-	   tauTerm,
-	   Gecc[i],
-	   tauTidal,
-	   dotEtid);
-    #endif
-  }
-  tauTidal*=b.gmt;
-  dotEtid*=b.gmt;
-  
-  //Keplerian parameters
-  real M=(real)fmod((real)(n*t),(real)(2*PI));
-  real E=solveKepler(b.e,M);
-  real f=2*atan(sqrt((1+b.e)/(1-b.e))*sin(E/2)/cos(E/2));
-  real r=b.a*(1-b.e*cos(E));
-
-  //Triaxial torque
-  tauTriaxial=1.5*(b.B-b.A)*b.mu*sin(2*(f-y[0]))/(r*r*r);
-
-  //Store values for external use
-  TauTidal=tauTidal/b.C;
-  TauTriax=tauTriaxial/b.C;
-  
-  
-  ////////////////////////////////
-  //d omega / dt = Torque
-  ////////////////////////////////
-  dydt[1]=(tauTidal+tauTriaxial)/b.C;
-
-  ////////////////////////////////
-  //d E / dt:
-  ////////////////////////////////
-  dydt[2]=dotEtid;
-
-  ////////////////////////////////
-  //d a / dt:
-  ////////////////////////////////
-  dota=2*b.a*b.a/(b.mu*b.M)*dotEtid;
-  dydt[3]=dota;
-
-  ////////////////////////////////
-  //d e / dt:
-  ////////////////////////////////
-  dydt[4]=
-    1/(2*b.a)*((1-b.e*b.e)*dota/2-(1/b.M)*sqrt(b.a*(1-b.e*b.e)/b.mu)*tauTidal);
-
-  #ifdef VERBOSE
-  Verbose("KEPLER: M=%e,E=%e,f=%e,r=%e\n",M,E,f,r);
-  Verbose("tauTidal=%e,tauTriax=%e,dwdt=%e,dEdt=%e\n",
-	 tauTidal,tauTriaxial,dydt[1],dydt[2]);
-  exit(0);
-  #endif
-  return GSL_SUCCESS;
-
-}
-
 ////////////////////////////////////////////////////////////////////////
 //LAPLACE COEFFICIENTS
 ////////////////////////////////////////////////////////////////////////
@@ -722,28 +631,30 @@ class SecularEvolution
 public:
   int Np;
   double* X;
+  int* Iplanets;
   LaplaceCoefficients **Laplaces;
   LaplaceCoefficients *laplace;
 
-  int set(int np,double *x,LaplaceCoefficients** ls)
+  int set(int np,double *x,int iplanets[],LaplaceCoefficients** ls)
   {
+    Iplanets=iplanets;
     Np=np;
-    X=(double*)calloc(5*Np,sizeof(double));
-    for(int i=0;i<5*Np;i++) X[i]=x[i];
+    X=(double*)calloc(NUMVARS*Np,sizeof(double));
+    for(int i=0;i<NUMVARS*Np;i++) X[i]=x[i];
     Laplaces=ls;
 
     #ifdef VERBOSE
     Verbose("\tSecular evolution properties:\n");
     Verbose("\tNumber of planets: %d\n",Np);
     Verbose("\tInitial elements: ");
-    fprintf_vec(stdout,"%e ",X,5*Np);
+    fprintf_vec(stdout,"%e ",X,NUMVARS*Np);
     #endif
     return 0;
   }
 
   int update(const double *x)
   {
-    for(int i=0;i<5*Np;i++) X[i]=x[i];
+    for(int i=0;i<NUMVARS*Np;i++){X[i]=x[i];}
   }
   
   double f2(double alpha){
@@ -873,7 +784,7 @@ public:
     double aM,eM,xiM,OmM,wM,mp;
 
     for(int i=0;i<Np;i++){
-      int ki=5*i;
+      int ki=NUMVARS*i;
       //fprintf(stdout,"Perturbed Planet %d (ki=%d):\n",i,ki);
       a=X[0+ki];
       e=X[1+ki];
@@ -881,11 +792,12 @@ public:
       Om=X[3+ki];
       w=X[4+ki];
 
-      dxdt[0+ki]=0.0;
-      dxdt[1+ki]=0.0;
+      //Set to zero xi,Omega,w+Omega
+      /*
       dxdt[2+ki]=0.0;
       dxdt[3+ki]=0.0;
       dxdt[4+ki]=0.0;
+      */
 
       double aux = sqrt(1.0-e*e);
       double si = sin(xi/2.0);
@@ -896,7 +808,7 @@ public:
 
       for(int j=0;j<Np;j++){
 	if(i==j) continue;
-	int kj=5*j;
+	int kj=NUMVARS*j;
 	//fprintf(stdout,"\tPerturber Planet %d (ki=%d):\n",j,kj);
 	aM=X[0+kj];
 	eM=X[1+kj];
@@ -1200,3 +1112,150 @@ int secularFunction(double t,const double y[],double yp[],void *param)
   plsys->secular(yp);
   return 0;
 }
+
+int tidalAcceleration(double t,const double y[],double dydt[],params ps)
+{
+  SecularEvolution *plsys=(SecularEvolution*)ps;
+  int Np;
+  real wterm,w220q,X220q;
+  real tauTerm;
+  real tauTidal,tauTriaxial,dotEtid,dota;
+  real n;
+  int l=2,m=2,p=0,q;
+  real chitauA;
+  real R,I;
+  int i;
+  real M,E,f,r;
+
+  static int ncall=1;
+
+  //Number of planets
+  Np=plsys->Np;
+  
+  //RESET dydt
+  #ifdef SECULAR
+  memset(dydt,0,Np*NUMVARS*sizeof(dydt[0]));
+  #endif
+
+  #ifdef VERBOSE
+  fprintf(stdout,"Time:%e\n",t);
+  fprintf(stdout,"Number of planets:%d\n",Np);
+  fprintf(stdout,"Vector:");
+  fprintf_vec(stdout,"%e ",y,NUMVARS*Np);
+  fprintf(stdout,"Derivatives:");
+  fprintf_vec(stdout,"%e ",dydt,NUMVARS*Np);
+  #endif
+
+  int ip,k,indp;
+  Body b;
+
+  for(ip=0;ip<Np;ip++){
+    k=8*ip;
+    indp=plsys->Iplanets[ip];
+    b=Bodies[indp];
+    n=b.n;
+    
+    //fprintf(stdout,"Body %d (%d,%s):\n",ip,indp,STR(b.name));
+
+    ////////////////////////////////
+    //d theta / dt = omega
+    ////////////////////////////////
+    dydt[5+k]=y[6+k];
+  
+    ////////////////////////////////
+    //Torques
+    ////////////////////////////////
+    //Tidal torque
+    tauTidal=0;
+    dotEtid=0;
+    wterm=(l-2*p)*n-m*y[6+k];
+    for(q=-2;q<=7;q++){
+      i=q+3;
+      w220q=wterm+q*n;
+      X220q=fabs(w220q);
+      chitauA=PREAL(X220q*b.tauA,b.alpha);
+      R=1+b.gapo*b.cosapt/chitauA;
+      I=-1.0/(X220q*b.tauM)-b.gapo*b.sinapt/chitauA;
+      tauTerm=(-1.5*b.A2*I/((R+b.A2)*(R+b.A2)+I*I));
+      tauTidal+=Gecc[i]*tauTerm*SGN(w220q);
+      dotEtid+=Gecc[i]*tauTerm*X220q;
+      #ifdef VERBOSE
+      Verbose("(%d,%d): %e %e %e %e %e %e %e %e %e\n",
+	      q,i,w220q,b.alpha,b.gapo,R,I,
+	      tauTerm,
+	      Gecc[i],
+	      tauTidal,
+	      dotEtid);
+      #endif
+    }
+    tauTidal*=b.gmt;
+    dotEtid*=b.gmt;
+  
+    //Keplerian parameters
+    M=(real)fmod((real)(n*t),(real)(2*PI));
+    E=solveKepler(b.e,M);
+    f=2*atan(sqrt((1+b.e)/(1-b.e))*sin(E/2)/cos(E/2));
+    r=b.a*(1-b.e*cos(E));
+
+    //Triaxial torque
+    tauTriaxial=1.5*(b.B-b.A)*b.mu*sin(2*(f-y[5+k]))/(r*r*r);
+
+    //Store values for external use
+    TauTidal=tauTidal/b.C;
+    TauTriax=tauTriaxial/b.C;
+
+    ////////////////////////////////
+    //d omega / dt = Torque
+    ////////////////////////////////
+    dydt[6+k]=(tauTidal+tauTriaxial)/b.C;
+
+    ////////////////////////////////
+    //d E / dt:
+    ////////////////////////////////
+    dydt[7+k]=dotEtid;
+
+    ////////////////////////////////
+    //Orbit evolution:
+    ////////////////////////////////
+    dydt[0+k]=0.0;
+    dydt[1+k]=0.0;
+
+    ////////////////////////////////
+    //d a / dt:
+    ////////////////////////////////
+    dota=2*b.a*b.a/(b.mu*b.M)*dotEtid;
+    dydt[0+k]=dota;
+
+    ////////////////////////////////
+    //d e / dt:
+    ////////////////////////////////
+    dydt[1+k]=
+      1/(2*b.a)*((1-b.e*b.e)*dota/2-(1/b.M)*sqrt(b.a*(1-b.e*b.e)/b.mu)*tauTidal);
+
+    #ifdef VERBOSE
+    fprintf(stdout,"Tidal changes:\n");
+    fprintf_vec(stdout,"%e ",dydt,NUMVARS*Np);
+    Verbose("KEPLER: M=%e,E=%e,f=%e,r=%e\n",M,E,f,r);
+    Verbose("tauTidal=%e,tauTriax=%e,dwdt=%e,dEdt=%e\n",
+	    tauTidal,tauTriaxial,dydt[6+k],dydt[7+k]);
+    #endif
+  }
+
+  ////////////////////////////////
+  //Secular Contribution
+  ////////////////////////////////
+  #ifdef SECULAR
+  plsys->update(y);
+  plsys->secular(dydt);
+  #endif
+
+  #ifdef VERBOSE
+  fprintf(stdout,"Secular changes:\n");
+  fprintf_vec(stdout,"%e ",dydt,NUMVARS*Np);
+  #endif
+
+  //exit(0);
+  return GSL_SUCCESS;
+
+}
+

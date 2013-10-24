@@ -1,3 +1,6 @@
+//NUMBER OF VARIABLES
+#define NUMVARS 8 //5 elements + theta + omega + Etid
+
 #include <tidev.cpp>
 #define ODEMETHOD gsl_odeiv2_step_rk4
 
@@ -74,8 +77,6 @@ int main(int argc,char *argv[])
   configValue(real,dtstep,"dtstep");
   configValue(real,dtscreen,"dtscreen");
   configValue(real,tend,"tend");
-  configValue(real,thetaini,"thetaini");
-  configValue(real,Pini,"Pini");
 
   ////////////////////////////////////////////////////////////////////////
   //ECCENTRICITY FUNCTIONS
@@ -98,112 +99,201 @@ int main(int argc,char *argv[])
   FILE** fls;
   fls=(FILE**)calloc(niplanets,sizeof(FILE*));
   char fname[100];
-  int i;
+  int i,j;
   for(i=0;i<niplanets;i++){
-    sprintf(fname,"results_%s.dat",STR(Bodies[iplanets[i]].name));
+    sprintf(fname,"orbtidal_%s.dat",STR(Bodies[iplanets[i]].name));
     fls[i]=fopen(fname,"w");
   }
   for(i=0;i<niplanets;i++) fclose(fls[i]);
-  exit(0);
 
   ////////////////////////////////////////////////////////////////////////
   //PREPARE INTEGRATOR
   ////////////////////////////////////////////////////////////////////////
-  #define NUMVARS 8 //5 elements + theta + omega + Etid
   double* x=(double*)calloc(NUMVARS*niplanets,sizeof(double));
   double* xout=(double*)calloc(NUMVARS*niplanets,sizeof(double));
   double* dxdt=(double*)calloc(NUMVARS*niplanets,sizeof(double));
 
   int ip,jp;
   int k=0;
+
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  //INITIAL CONDITIONS
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  for(i=0;i<niplanets;i++){
+    k=8*i;
+    ip=iplanets[i];
+
+    //0:a
+    x[0+k]=Bodies[ip].a;
+    //1:e
+    x[1+k]=Bodies[ip].e;
+    //2:xi
+    x[2+k]=Bodies[ip].xi*D2R;
+    //3:Omega
+    x[3+k]=Bodies[ip].Om*D2R;
+    //4:w + Omega
+    x[4+k]=fmod((Bodies[ip].w+Bodies[ip].Om)*D2R,2*PI);
+    //5:theta
+    x[5+k]=Bodies[ip].thetaini;
+    //6:omega
+    x[6+k]=2*PI/Bodies[ip].Pini;
+    //7:Etid
+    x[7+k]=0.0;
+    fprintf(stdout,"Planet %d (%d,%s) state vector:",i,ip,STR(Bodies[ip].name));
+    fprintf_vec(stdout,"%e ",x,(i+1)*NUMVARS,k);
+  }
+  fprintf(stdout,"Full state vector:");
+  fprintf_vec(stdout,"%e ",x,NUMVARS*niplanets);
+
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  //INITIALIZE KEY VARIABLES
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  double alpha;
+  LC** Laps=laplaceAlloc(niplanets,niplanets);
   for(i=0;i<niplanets;i++){
     ip=iplanets[i];
-    x[k++]=Bodies[ip].a;
-    x[k++]=Bodies[ip].e;
-    x[k++]=Bodies[ip].xi*D2R;
-    x[k++]=Bodies[ip].Om*D2R;
-    x[k++]=fmod((Bodies[ip].w+Bodies[ip].Om)*D2R,2*PI);
+    for(j=i+1;j<niplanets;j++){
+      jp=iplanets[j];
+      alpha=ALPHA(Bodies[ip].a,Bodies[jp].a);
+      fprintf(stdout,"i=%d (ip=%d), j=%d (jp=%d): alpha = %e\n",i,ip,j,jp,alpha);
+
+      Laps[i][j].set(alpha,Bodies[ip].M);
+      Laps[i][j].coefcs();
+
+      Laps[j][i].set(alpha,Bodies[jp].M);
+      Laps[j][i].coefcs();
+    }
   }
-  fprintf(stdout,"State vector:");
-  fprintf_vec(stdout,"%e ",x,5*niplanets);
-  
 
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  //INITIALIZE SECULAR EVOLUTION
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  SecularEvolution plsys;
+  plsys.set(niplanets,x,iplanets,Laps);
+  /*
+  plsys.secular(dxdt);
+  fprintf_vec(stdout,"%e ",dxdt,NUMVARS*niplanets);
+  */
 
-
-  //BODY
-  IBody=1;
-
-  //Variables (5): theta,omega,E,a,e
-  gsl_odeiv2_system sys={tidalAcceleration,NULL,5,NULL};
-  gsl_odeiv2_driver* driver=
-    gsl_odeiv2_driver_alloc_y_new(&sys,ODEMETHOD,
-				  1E-3,0,1E-6);
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  //INITIALIZE SYSTEM
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  gsl_odeiv2_system sys={tidalAcceleration,NULL,NUMVARS*niplanets,&plsys};
+  gsl_odeiv2_driver* driver=gsl_odeiv2_driver_alloc_y_new(&sys,ODEMETHOD,1E-3,0,1E-6);
   
   ////////////////////////////////////////////////////////////////////////
   //RUN INTEGRATION
   ////////////////////////////////////////////////////////////////////////
   int status;
-  real y[5],dydt[5];
   real accel,Etid;
-  real t=0,tstep=dtstep;
+  real t=0;
   int NT=0;
   double TINI,T1,T2,TIME,TEND,TAVG;
-  double Prot,dtmin,dtmax;
+  double Prot,Protmin,dtmin,dtmax;
+  double TauTotal;
+  bool qsecular=false;
+  #ifdef SECULAR
+  qsecular=true;
+  #endif
 
-  //Initial conditions
-  y[0]=thetaini*PI/180;	        //Angulo inicial (probabilidad de captura: P(y(1)))
-  y[1]=2*PI/(Pini*HOURS/UT); 	//Initial angular velocity
-  y[2]=0.0; 			//Disipated energy
-  y[3]=Bodies[IBody].a;		//Semimajor axis init
-  y[4]=Bodies[IBody].e;		//Eccentricity init
-
-  //Integrate!
-  file fl=fopen(outputFile,"w");
   TINI=T1=Time();
-
+  double tstep;
   for(tstep=dtstep;tstep<tend;tstep+=dtstep){
 
     //STEP SIZE
-    Prot=2*PI/y[1];
-    dtmin=ftmin*Prot;
-    dtmax=ftmax*Prot;
+    Protmin=1E100;
+    for(i=0;i<niplanets;i++){
+      k=8*i;
+      Prot=2*PI/x[6+k];
+      Protmin=Prot<=Protmin?Prot:Protmin;
+    }
+    dtmin=ftmin*Protmin;
+    dtmax=ftmax*Protmin;
     gsl_odeiv2_driver_set_hmin(driver,dtmin);
     gsl_odeiv2_driver_set_hmax(driver,dtmax);
-    fprintf(stdout,"dtmin = %e, dtmax = %e\n",dtmin,dtmax);
 
+    fprintf(stdout,"Integrating at t = %e: dtmin = %e, dtmax = %e (SECULAR = %d)...\n",t,dtmin,dtmax,qsecular);
+
+    #ifdef VERBOSE
+    fprintf(stdout,"Initial state at t = %e:\n",t);
+    fprintf_vec(stdout,"%e ",x,NUMVARS*niplanets);
+    #endif
+  
     //STEP
-    status=gsl_odeiv2_driver_apply(driver,&t,tstep,y);
-
+    status=gsl_odeiv2_driver_apply(driver,&t,tstep,x);
+    
     //COMPUTE ACCELERATION AND DISSIPATED ENERGY
-    tidalAcceleration(tstep,y,dydt,NULL);
-    accel=dydt[1];
-    Etid=y[2]*(UM*UL*UL/(UT*UT));
+    tidalAcceleration(tstep,x,dxdt,&plsys);
+
+    #ifdef VERBOSE
+    fprintf(stdout,"Last state:\n");
+    fprintf_vec(stdout,"%e ",x,NUMVARS*niplanets);
+    fprintf(stdout,"Last derivative:\n");
+    fprintf_vec(stdout,"%e ",dxdt,NUMVARS*niplanets);
+    fprintf(stdout,"Time = %e secs\n",(Time()-TINI)*MICRO);
+    exit(0);
+    #endif
 
     //PRINT SCREEN REPORT
-    fprintf(fl,"%e %e %e %e %e %e %e %e %e\n",
-	    tstep,
-	    y[0],y[1]/Bodies[IBody].n,Etid,y[3],y[4],
-	    accel,TauTidal,TauTriax);
+    for(i=0;i<niplanets;i++){
+      k=8*i;
+      ip=iplanets[i];
+
+      //Energy dissipated
+      Etid=x[2+k]*(UM*UL*UL/(UT*UT));
+
+      //Total tidal acceleration
+      accel=dxdt[6+k];
+      TauTotal=0.0;
+
+      //Columns: 0:t,1:a(0),2:e(1),3:theta(5),4:Omega(6)/n,5:Etid(7)
+      fprintf(fls[i],"%e %e %e %e %e %e\n",
+	      tstep,
+	      x[0+k],x[1+k],
+	      x[5+k],x[6+k]/Bodies[ip].n,
+	      Etid,accel);
+    }
 
     //STORE IN OUTPUT FILE
     if(fmod(tstep,dtscreen)<1E-5){
       T2=Time();
       TIME=(T2-T1)*MICRO;
-      printf("t=%e, theta=%e, Omega/n=%e, Etid=%e, a=%e, e=%e, cpu time = %e sec, cumulative = %e sec\n",
-	     t,y[0],y[1]/Bodies[IBody].n,Etid,y[3],y[4],TIME,(T2-TINI)*MICRO);
+
+      for(i=0;i<niplanets;i++){
+	k=8*i;
+	ip=iplanets[i];
+	
+	//Energy dissipated
+	Etid=x[2+k]*(UM*UL*UL/(UT*UT));
+	
+	//Total tidal acceleration
+	accel=dxdt[6+k];
+	TauTotal=0.0;
+	
+	//Columns: 0:t,1:a(0),2:e(1),3:theta(5),4:Omega(6)/n,5:Etid(7)
+	fprintf(stdout,"Planet %d (%d,%s):\n",i,ip,STR(Bodies[ip].name));
+	fprintf(stdout,"\tt = %e, a = %e, e = %e, theta = %e, Omega/n = %e,Etid = %e, accel = %e, step = %e secs, cumulative = %e secs\n",
+		tstep,
+		x[0+k],x[1+k],
+		x[5+k],x[6+k]/Bodies[ip].n,
+		Etid,accel,
+		TIME,(T2-TINI)*MICRO
+		);
+      }
+
       if(t>dtstep){
 	TAVG+=TIME;
 	NT++;
       }
       T1=Time();
     }
-
+    exit(0);
   }
   TEND=Time();
   TAVG/=NT;
   printf("Average time: %e secs\n",TAVG);
   printf("Total time: %e secs\n",(TEND-TINI)*MICRO);
-  fclose(fl);
+  for(i=0;i<niplanets;i++) fclose(fls[i]);
 
   return 0;
 }
