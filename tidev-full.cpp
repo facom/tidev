@@ -34,6 +34,7 @@ int main(int argc,char *argv[])
       exit(1);
     }
   }
+  
 
   ////////////////////////////////////////////////////////////////////////
   //INITIALIZATION
@@ -96,12 +97,18 @@ int main(int argc,char *argv[])
   ////////////////////////////////////////////////////////////////////////
   //PREPARE OUTPUT FILES
   ////////////////////////////////////////////////////////////////////////
+  char secstr[100];
+  sprintf(secstr,"nocoupled");
+  #ifdef SECULAR
+  sprintf(secstr,"coupled");
+  #endif
+
   FILE** fls;
   fls=(FILE**)calloc(niplanets,sizeof(FILE*));
   char fname[100];
   int i,j;
   for(i=0;i<niplanets;i++){
-    sprintf(fname,"orbtidal_%s.dat",STR(Bodies[iplanets[i]].name));
+    sprintf(fname,"orbtidal-%s_%s.dat",secstr,STR(Bodies[iplanets[i]].name));
     fls[i]=fopen(fname,"w");
   }
   for(i=0;i<niplanets;i++) fclose(fls[i]);
@@ -287,7 +294,7 @@ int main(int argc,char *argv[])
       }
       T1=Time();
     }
-    exit(0);
+    //exit(0);
   }
   TEND=Time();
   TAVG/=NT;

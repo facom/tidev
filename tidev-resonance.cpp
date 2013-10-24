@@ -62,7 +62,7 @@ int main(int argc,char *argv[])
   //PREPARE INTEGRATOR
   ////////////////////////////////////////////////////////////////////////
   //BODY
-  IBody=2;
+  IBody=1;
 
   //Variables (5): theta,omega,E,a,e
   gsl_odeiv2_system sys={tidalAcceleration,NULL,5,NULL};
