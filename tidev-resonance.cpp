@@ -1,8 +1,5 @@
 #include <tidev.cpp>
-
-//#define METHOD gsl_odeiv2_step_rk8pd
-//#define METHOD gsl_odeiv2_step_rk2
-#define METHOD gsl_odeiv2_step_rk4
+#define ODEMETHOD gsl_odeiv2_step_rk4
 
 #define OPTIONS "c:o:"
 const char* Usage=
@@ -70,12 +67,13 @@ int main(int argc,char *argv[])
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //NUMERICAL
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  configValue(real,dt,"dt");
+  configValue(real,ftmin,"ftmin");
+  configValue(real,ftmax,"ftmax");
   configValue(real,dtstep,"dtstep");
   configValue(real,dtscreen,"dtscreen");
   configValue(real,tend,"tend");
   configValue(real,thetaini,"thetaini");
-  configValue(real,omegaini,"omegaini");
+  configValue(real,Pini,"Pini");
 
   ////////////////////////////////////////////////////////////////////////
   //ECCENTRICITY FUNCTIONS
@@ -85,24 +83,29 @@ int main(int argc,char *argv[])
   ////////////////////////////////////////////////////////////////////////
   //PREPARE INTEGRATOR
   ////////////////////////////////////////////////////////////////////////
+  //BODY
+  IBody=1;
+
   //Variables (5): theta,omega,E,a,e
   gsl_odeiv2_system sys={tidalAcceleration,NULL,5,NULL};
   gsl_odeiv2_driver* driver=
     gsl_odeiv2_driver_alloc_y_new(&sys,METHOD,
-				  dt,0,1E-5);
+				  dt,0,1E-6);
   
   ////////////////////////////////////////////////////////////////////////
   //RUN INTEGRATION
   ////////////////////////////////////////////////////////////////////////
+  int status;
   real y[5],dydt[5];
   real accel,Etid;
   real t=0,tstep=dtstep;
   int NT=0;
   double TINI,T1,T2,TIME,TEND,TAVG;
+  double Prot,dtmin,dtmax;
 
   //Initial conditions
   y[0]=thetaini*PI/180;	        //Angulo inicial (probabilidad de captura: P(y(1)))
-  y[1]=omegaini*Bodies[IBody].n; 	//Periodo inicial equivalente a 10 h 
+  y[1]=2*PI/(Pini*HOURS/UT) 	//Initial angular velocity
   y[2]=0.0; 			//Disipated energy
   y[3]=Bodies[IBody].a;		//Semimajor axis init
   y[4]=Bodies[IBody].e;		//Eccentricity init
@@ -110,10 +113,18 @@ int main(int argc,char *argv[])
   //Integrate!
   file fl=fopen(outputFile,"w");
   TINI=T1=Time();
-  for(tstep=0;tstep<tend;tstep+=dtstep){
+  for(tstep=dtstep;tstep<tend;tstep+=dtstep){
+
+    //STEP SIZE
+    Prot=2*PI/y[1];
+    dtmin=ftmin*Prot;
+    dtmax=ftmax*Prot;
+    gsl_odeiv2_driver_set_hmin(driver,dtmin);
+    gsl_odeiv2_driver_set_hmax(driver,dtmax);
+    fprintf(stdout,"dtmin = %e, dtmax = %e\n",dtmin,dtmax);
 
     //STEP
-    int status=gsl_odeiv2_driver_apply(driver,&t,tstep,y);
+    status=gsl_odeiv2_driver_apply(driver,&t,tstep,y);
 
     //COMPUTE ACCELERATION AND DISSIPATED ENERGY
     tidalAcceleration(tstep,y,dydt,NULL);
@@ -130,7 +141,7 @@ int main(int argc,char *argv[])
     if(fmod(tstep,dtscreen)<1E-5){
       T2=Time();
       TIME=(T2-T1)*MICRO;
-      printf("t=%e, y[0]=%e, y[1]/n=%e, y[2]=%e, y[3]=%e, y[4]=%e, time = %e sec\n",
+      printf("t=%e, theta=%e, Omega/n=%e, Etid=%e, a=%e, e=%e, cpu time = %e sec\n",
 	     t,y[0],y[1]/Bodies[IBody].n,Etid,y[3],y[4],TIME);
       if(t>dtstep){
 	TAVG+=TIME;

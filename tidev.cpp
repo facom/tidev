@@ -93,6 +93,7 @@ typedef FILE* file;
 #define MSUN (GSL_CONST_MKSA_SOLAR_MASS) //kg
 #define RSUN (6.96342E8) //m
 #define AU (GSL_CONST_MKSA_ASTRONOMICAL_UNIT) //m
+#define HOURS (3600.0) //s
 #define YEAR (365.25*GSL_CONST_MKSA_DAY) //s
 #define MEARTH (5.9736E24) //kg
 #define REARTH (6.371E6) //m
