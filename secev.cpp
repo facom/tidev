@@ -3,6 +3,7 @@
 
 int main(int argc,char *argv[])
 {
+  int i,j;
   ////////////////////////////////////////////////////////////////////////
   //INITIALIZATION
   ////////////////////////////////////////////////////////////////////////
@@ -65,85 +66,81 @@ int main(int argc,char *argv[])
   NBodies=3;
   NPlanets=2;
   //*/
+  
+  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  //SELECTING INTERACTING PLANETS
+  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  //1-b,2-c,3-d,4-e,5-f,6-g
+  int iplanets[]={1,2,3,4,5,6};
+  int niplanets=6;
+
+  FILE** fl;
+  fl=(FILE**)calloc(niplanets,sizeof(FILE*));
+  char fname[100];
+  for(i=0;i<niplanets;i++){
+    sprintf(fname,"results_%s.dat",STR(Bodies[iplanets[i]].name));
+    fl[i]=fopen(fname,"w");
+  }
+  //exit(0);
 
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //INITIAL CONDITIONS PLANET AND PERTURBERS
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  int npert;
-
   //INITIAL STATE VECTOR
-  double* x=(double*)calloc(5,sizeof(double));
+  double* x=(double*)calloc(5*niplanets,sizeof(double));
+  double* xout=(double*)calloc(5*niplanets,sizeof(double));
+  double* dxdt=(double*)calloc(5*niplanets,sizeof(double));
 
-  //GRADIENT VECTOR
-  double* dxdt=(double*)calloc(5,sizeof(double));
+  int ip,jp;
+  int k=0;
+  for(i=0;i<niplanets;i++){
+    ip=iplanets[i];
+    x[k++]=Bodies[ip].a;
+    x[k++]=Bodies[ip].e;
+    x[k++]=Bodies[ip].xi*D2R;
+    x[k++]=Bodies[ip].Om*D2R;
+    x[k++]=fmod((Bodies[ip].w+Bodies[ip].Om)*D2R,2*PI);
+  }
+  fprintf(stdout,"State vector:");
+  fprintf_vec(stdout,"%e ",x,5*niplanets);
 
-  //PERTURBER STATE VECTOR
-  double** xp=matrixAlloc(NPlanets,6);
-
-  //LAPLACE COEFFICIENTS
-  LaplaceCoefficients* laps=(LaplaceCoefficients*)calloc(NPlanets,
-							 sizeof(LaplaceCoefficients));
-  
-  //INITIALIZATION STATE VECTOR PERTURBED BODY
-  IBody=2;
-  x[0]=Bodies[IBody].a;
-  x[1]=Bodies[IBody].e;
-  x[2]=Bodies[IBody].xi*D2R;
-  x[3]=Bodies[IBody].Om*D2R;
-  x[4]=fmod((Bodies[IBody].w+Bodies[IBody].Om)*D2R,2*PI);
-  fprintf(stdout,"Perturbed planet %d: ",IBody);
-  fprintf_vec(stdout,"%e ",x,5);
-
-  //INITIALIZATION STATE VECTOR PERTURBER BODIES
-  int j=0;
+  //INITIALIZING LAPLACE COEFFICIENTS
   double alpha;
-  //1-b,2-c,3-d,4-e,5-f,6-g
-  for(int i=1;i<=NPlanets;i++){
-    if(i!=IBody && (i==4)){
-      xp[j][0]=Bodies[i].a;
-      xp[j][1]=Bodies[i].e;
-      xp[j][2]=Bodies[i].xi*D2R;
-      xp[j][3]=Bodies[i].Om*D2R;
-      xp[j][4]=fmod((Bodies[i].w+Bodies[i].Om)*D2R,2*PI);
-      xp[j][5]=Bodies[i].M;
-      alpha=Bodies[IBody].a<xp[j][0]?Bodies[IBody].a/xp[j][0]:xp[j][0]/Bodies[IBody].a;
-      laps[j].set(alpha);
-      laps[j].coefcs();
+  LC** Laps=laplaceAlloc(niplanets,niplanets);
+  for(i=0;i<niplanets;i++){
+    ip=iplanets[i];
+    for(j=i+1;j<niplanets;j++){
+      jp=iplanets[j];
+      alpha=ALPHA(Bodies[ip].a,Bodies[jp].a);
+      fprintf(stdout,"i=%d (ip=%d), j=%d (jp=%d): alpha = %e\n",i,ip,j,jp,alpha);
 
-      #ifdef VERBOSE
-      Verbose("Perturber %d -> Planet %d:%s\n",j,i,STR(Bodies[i].name));
-      Verbose("Elements:");
-      for(int k=0;k<=5;k++)
-	fprintf(stdout,"%e ",xp[j][k]);
-      fprintf(stdout,"\n");
-      #endif
+      Laps[i][j].set(alpha,Bodies[ip].M);
+      Laps[i][j].coefcs();
 
-      j++;
+      Laps[j][i].set(alpha,Bodies[jp].M);
+      Laps[j][i].coefcs();
     }
   }
-  npert=j;
-  fprintf(stdout,"Number of perturbing planets: %d\n",npert);
-  fprintf(stdout,"Mu = %e\n",GPROG*Bodies[0].M);
   
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //INITIALIZE SECULAR EVOLUTION SYSTEM
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   SecularEvolution plsys;
-  plsys.set(npert,x,xp,laps);
+  plsys.set(niplanets,x,Laps);
   plsys.secular(dxdt);
-  fprintf_vec(stdout,"%e ",dxdt,5);
+  fprintf_vec(stdout,"%e ",dxdt,5*niplanets);
 
-  //exit(0);
-  
-  gsl_odeiv2_system sys={secularFunction,NULL,5,&plsys};
+  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  //INTEGRATE
+  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  gsl_odeiv2_system sys={secularFunction,NULL,5*niplanets,&plsys};
 
   double NPeriod=1E5;
-  double P=Bodies[IBody].P;
+  double P=Bodies[iplanets[0]].P;
   double t=0.0;
   double dt=P/100.0;
   double tend=NPeriod*P;
   tend=10000;
-  double xout[5];
 
   fprintf(stdout,"Integration information:\n");
   fprintf(stdout,"\tP = %e\n",P);
@@ -156,34 +153,38 @@ int main(int argc,char *argv[])
 				  dt,
 				  0.0,1E-6);
 
-  FILE *fl=fopen("results.dat","w");
+  int kip;
+  //exit(0);
 
-  int i=0;
   do{
     gsl_odeiv2_driver_apply_fixed_step(d,&t,dt,1,x);
-
+    
     if((i%((int)NPeriod))==0){
       fprintf(stdout,"t = %e\n",t);
+      for(ip=0;ip<niplanets;ip++){
+	kip=5*ip;
 
-      xout[0]=x[0];
-      xout[1]=x[1];
-
-      xout[2]=fmod(x[2]/D2R,360.0);
-      if(xout[2]<0) xout[2]+=360;
-
-      xout[3]=fmod(x[3]/D2R,360.0);
-      if(xout[3]<0) xout[3]+=360;
-
-      xout[4]=fmod(x[4]/D2R,360.0);
-      xout[4]=fmod(xout[4]-xout[3],360);
-      if(xout[4]<0) xout[4]+=360;
-
-      fprintf(fl,"%e %e %e %e %e %e\n",t,xout[0],xout[1],xout[2],xout[3],xout[4]);
+	xout[0+kip]=x[0+kip];
+	xout[1+kip]=x[1+kip];
+	
+	xout[2+kip]=fmod(x[2+kip]/D2R,360.0);
+	if(xout[2+kip]<0) xout[2+kip]+=360;
+	
+	xout[3+kip]=fmod(x[3+kip]/D2R,360.0);
+	if(xout[3+kip]<0) xout[3+kip]+=360;
+	
+	xout[4+kip]=fmod(x[4+kip]/D2R,360.0);
+	xout[4+kip]=fmod(xout[4+kip]-xout[3+kip],360);
+	if(xout[4+kip]<0) xout[4+kip]+=360;
+	fprintf(fl[ip],"%e %e %e %e %e %e\n",t,
+		xout[0+kip],xout[1+kip],xout[2+kip],xout[3+kip],xout[4+kip]);
+      }
     }
     i++;
   }while(t<tend);
 
-  fclose(fl);
+  for(ip=0;ip<niplanets;ip++)
+    fclose(fl[ip]);
 
   return 0;
 }
