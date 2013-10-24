@@ -27,6 +27,7 @@ EDITOR=emacs -nw
 clean:
 	rm -rf *.o *.exe *.out *.log *~ \#*
 	find . -name *~ -exec rm -rf {} \;
+	rm -rf *.png
 
 cleanout:
 	rm -rf *.out *.o
