@@ -63,7 +63,9 @@ int main(int argc,char *argv[])
   //PHYSICAL SYSTEM
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   readBodies();
-
+  fprintf(stdout,"Number of bodies:%d\n",NBodies);
+  fprintf(stdout,"Number of planets:%d\n",NPlanets);
+  
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //NUMERICAL
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -81,8 +83,53 @@ int main(int argc,char *argv[])
   readGEcc(hansen_coefs);
 
   ////////////////////////////////////////////////////////////////////////
+  //SELECT INTERACTING PLANETS
+  ////////////////////////////////////////////////////////////////////////
+  /*
+  int iplanets[]={1,2,3,4,5,6};
+  int niplanets=6;
+  */
+  int iplanets[]={1,2};
+  int niplanets=2;
+  
+  ////////////////////////////////////////////////////////////////////////
+  //PREPARE OUTPUT FILES
+  ////////////////////////////////////////////////////////////////////////
+  FILE** fls;
+  fls=(FILE**)calloc(niplanets,sizeof(FILE*));
+  char fname[100];
+  int i;
+  for(i=0;i<niplanets;i++){
+    sprintf(fname,"results_%s.dat",STR(Bodies[iplanets[i]].name));
+    fls[i]=fopen(fname,"w");
+  }
+  for(i=0;i<niplanets;i++) fclose(fls[i]);
+  exit(0);
+
+  ////////////////////////////////////////////////////////////////////////
   //PREPARE INTEGRATOR
   ////////////////////////////////////////////////////////////////////////
+  #define NUMVARS 8 //5 elements + theta + omega + Etid
+  double* x=(double*)calloc(NUMVARS*niplanets,sizeof(double));
+  double* xout=(double*)calloc(NUMVARS*niplanets,sizeof(double));
+  double* dxdt=(double*)calloc(NUMVARS*niplanets,sizeof(double));
+
+  int ip,jp;
+  int k=0;
+  for(i=0;i<niplanets;i++){
+    ip=iplanets[i];
+    x[k++]=Bodies[ip].a;
+    x[k++]=Bodies[ip].e;
+    x[k++]=Bodies[ip].xi*D2R;
+    x[k++]=Bodies[ip].Om*D2R;
+    x[k++]=fmod((Bodies[ip].w+Bodies[ip].Om)*D2R,2*PI);
+  }
+  fprintf(stdout,"State vector:");
+  fprintf_vec(stdout,"%e ",x,5*niplanets);
+  
+
+
+
   //BODY
   IBody=1;
 
@@ -113,6 +160,7 @@ int main(int argc,char *argv[])
   //Integrate!
   file fl=fopen(outputFile,"w");
   TINI=T1=Time();
+
   for(tstep=dtstep;tstep<tend;tstep+=dtstep){
 
     //STEP SIZE
