@@ -111,7 +111,6 @@ int main(int argc,char *argv[])
     sprintf(fname,"orbtidal-%s_%s.dat",secstr,STR(Bodies[iplanets[i]].name));
     fls[i]=fopen(fname,"w");
   }
-  for(i=0;i<niplanets;i++) fclose(fls[i]);
 
   ////////////////////////////////////////////////////////////////////////
   //PREPARE INTEGRATOR
