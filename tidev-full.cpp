@@ -259,6 +259,7 @@ int main(int argc,char *argv[])
 	      x[0+k],x[1+k],
 	      x[5+k],x[6+k]/Bodies[ip].n,
 	      Etid,accel);
+      fflush(fls[i]);
     }
 
     //STORE IN OUTPUT FILE
