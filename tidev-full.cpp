@@ -1,54 +1,41 @@
 //NUMBER OF VARIABLES
 #define NUMVARS 8 //5 elements + theta + omega + Etid
-
+#define ODEMETHOD gsl_odeiv2_step_rk4 //Integration method
 #include <tidev.cpp>
-#define ODEMETHOD gsl_odeiv2_step_rk4
-
-#define OPTIONS "c:o:"
-const char* Usage=
-  MULTI(
-	Usage:\n
-	./tidev-resonance.cpp [-c <configuration-file>] [-o <output-file>]\n
-	\n
-	<configuration-file>: file with parameters.  Default: tidev.cfg\n
-	<output-file>: file for results\n
-	);
 
 int main(int argc,char *argv[])
 {
-  ////////////////////////////////////////////////////////////////////////
-  //COMMAND LINE OPTIONS
-  ////////////////////////////////////////////////////////////////////////
-  const char* configFile="tidev.cfg";
-  const char* outputFile="output.dat";
-  while((Option=getopt(argc,argv,OPTIONS))!=-1){
-    switch(Option){
-    case 'c':
-      configFile=optarg;
-      break;
-    case 'o':
-      outputFile=optarg;
-      break;
-    case '?':
-      fprintf(stderr,"%s",Usage);
-      exit(1);
-    }
-  }
-  
+  int i,j;
 
   ////////////////////////////////////////////////////////////////////////
   //INITIALIZATION
   ////////////////////////////////////////////////////////////////////////
   //TURN OFF GSL ERROR 
   errorOff();
-  
+
   //LOAD CONFIGURATION
+  configLoad("tidev.cfg");
   configInit();
-  configLoad(configFile);
 
   ////////////////////////////////////////////////////////////////////////
   //CONFIGURATION PARAMETERS
   ////////////////////////////////////////////////////////////////////////
+  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  //MODE
+  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  configValue(string,mode,"mode");
+  if(!mode.compare("tidal"))
+    Mode=0;
+  else if(!mode.compare("tidal+secular"))
+    Mode=1;
+  else if(!mode.compare("secular"))
+    Mode=2;
+  else{
+    fprintf(stderr,"Mode not recognized\n");
+    exit(1);
+  }
+  fprintf(stdout,"Mode: %s (%d)\n",STR(mode),Mode);
+  
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //UNITS
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -67,8 +54,10 @@ int main(int argc,char *argv[])
   //PHYSICAL SYSTEM
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   readBodies();
+  #ifdef VERBOSE
   fprintf(stdout,"Number of bodies:%d\n",NBodies);
   fprintf(stdout,"Number of planets:%d\n",NPlanets);
+  #endif
   
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //NUMERICAL
@@ -79,36 +68,40 @@ int main(int argc,char *argv[])
   configValue(real,dtscreen,"dtscreen");
   configValue(real,tend,"tend");
 
+  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  //LIST OF PLANETS
+  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  int iplanets[100];
+  int niplanets=0;
+  for(i=0;i<NBodies;i++){
+    if(Bodies[i].active)
+      iplanets[niplanets++]=i;
+  }
+  if(!niplanets){
+    fprintf(stderr,"No planet active.  Please active at least one planet.\n");
+    exit(1);
+  }
+
   ////////////////////////////////////////////////////////////////////////
   //ECCENTRICITY FUNCTIONS
   ////////////////////////////////////////////////////////////////////////
   readGEcc(hansen_coefs);
 
   ////////////////////////////////////////////////////////////////////////
-  //SELECT INTERACTING PLANETS
-  ////////////////////////////////////////////////////////////////////////
-  /*
-  int iplanets[]={1,2,3,4,5,6};
-  int niplanets=6;
-  */
-  int iplanets[]={1,2};
-  int niplanets=2;
-  
-  ////////////////////////////////////////////////////////////////////////
   //PREPARE OUTPUT FILES
   ////////////////////////////////////////////////////////////////////////
   char secstr[100];
-  sprintf(secstr,"nocoupled");
-  #ifdef SECULAR
-  sprintf(secstr,"coupled");
-  #endif
+  sprintf(secstr,"tidal");
+  if(Mode==1)
+    sprintf(secstr,"tidal+secular");
+  if(Mode==2)
+    sprintf(secstr,"secular");
 
   FILE** fls;
   fls=(FILE**)calloc(niplanets,sizeof(FILE*));
   char fname[100];
-  int i,j;
   for(i=0;i<niplanets;i++){
-    sprintf(fname,"orbtidal-%s_%s.dat",secstr,STR(Bodies[iplanets[i]].name));
+    sprintf(fname,"evolution_%s-%s.dat",secstr,STR(Bodies[iplanets[i]].name));
     fls[i]=fopen(fname,"w");
   }
 
@@ -197,11 +190,7 @@ int main(int argc,char *argv[])
   double TINI,T1,T2,TIME,TEND,TAVG;
   double Prot,Protmin,dtmin,dtmax;
   double TauTotal;
-  bool qsecular=false;
-  #ifdef SECULAR
-  qsecular=true;
-  #endif
-
+    
   TINI=T1=Time();
   double tstep;
   for(tstep=dtstep;tstep<tend;tstep+=dtstep){
@@ -218,7 +207,7 @@ int main(int argc,char *argv[])
     gsl_odeiv2_driver_set_hmin(driver,dtmin);
     gsl_odeiv2_driver_set_hmax(driver,dtmax);
 
-    fprintf(stdout,"Integrating at t = %e: dtmin = %e, dtmax = %e (SECULAR = %d)...\n",t,dtmin,dtmax,qsecular);
+    fprintf(stdout,"\nIntegrating at t = %e: dtmin = %e, dtmax = %e (Mode = %s)...\n",t,dtmin,dtmax,STR(mode));
 
     #ifdef VERBOSE
     fprintf(stdout,"Initial state at t = %e:\n",t);
@@ -279,7 +268,7 @@ int main(int argc,char *argv[])
 	
 	//Columns: 0:t,1:a(0),2:e(1),3:theta(5),4:Omega(6)/n,5:Etid(7)
 	fprintf(stdout,"Planet %d (%d,%s):\n",i,ip,STR(Bodies[ip].name));
-	fprintf(stdout,"\tt = %e, a = %e, e = %e, theta = %e, Omega/n = %e,Etid = %e, accel = %e, step = %e secs, cumulative = %e secs\n",
+	fprintf(stdout,"\tt = %e, a = %e, e = %e, theta = %e, Omega/n = %e, Etid = %e, accel = %e, step = %e secs, cumulative = %e secs\n",
 		tstep,
 		x[0+k],x[1+k],
 		x[5+k],x[6+k]/Bodies[ip].n,
