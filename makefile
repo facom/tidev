@@ -25,7 +25,7 @@ EDITOR=emacs -nw
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	rm -rf *.o *.exe *.out *.log *~ \#*
+	rm -rf *.o *.exe *.out *.log *~ \#* *.dump
 	find . -name *~ -exec rm -rf {} \;
 	rm -rf *.png
 

@@ -1,5 +1,9 @@
+TidEv
 ToDo List
 =========
 
-* Start an integration in the last point.
+* [PEND] Update list of planets for tidal integration (avoiding to
+  integrate planets locked or in a synchronic orbit)
+
+* [DONE] Start an integration in the last point.
 

@@ -127,6 +127,7 @@ class Body
 {
 public:
   int active;
+  int tidal;
 
   string name;
   string units;
@@ -282,6 +283,7 @@ int readBodies(void)
   for(int i=0;i<NBodies;i++){
     //Read properties
     configValueList(bodies[i],Bodies[i].active,"active");
+    configValueList(bodies[i],Bodies[i].tidal,"tidal");
 
     configValueList(bodies[i],Bodies[i].name,"name");
     configValueList(bodies[i],Bodies[i].units,"units");
@@ -647,10 +649,15 @@ public:
   LaplaceCoefficients **Laplaces;
   LaplaceCoefficients *laplace;
 
-  int set(int np,double *x,int iplanets[],LaplaceCoefficients** ls)
+  int set(int np,int iplanets[],int nptid,int iplanetstid[],
+	  double *x,LaplaceCoefficients** ls)
   {
-    Iplanets=iplanets;
     Np=np;
+    Iplanets=iplanets;
+    
+    Nptid=nptid;
+    Iplanetstid=iplanetstid;
+    
     X=(double*)calloc(NUMVARS*Np,sizeof(double));
     for(int i=0;i<NUMVARS*Np;i++) X[i]=x[i];
     Laplaces=ls;
@@ -1128,7 +1135,7 @@ int secularFunction(double t,const double y[],double yp[],void *param)
 int tidalAcceleration(double t,const double y[],double dydt[],params ps)
 {
   SecularEvolution *plsys=(SecularEvolution*)ps;
-  int Np;
+  int Np,Nptid;
   real wterm,w220q,X220q;
   real tauTerm;
   real tauTidal,tauTriaxial,dotEtid,dota;
@@ -1143,6 +1150,7 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
 
   //Number of planets
   Np=plsys->Np;
+  Nptid=plsys->Nptid;
   
   //RESET dydt
   if(Mode>0)
@@ -1161,9 +1169,9 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
   Body b;
 
   if(Mode==0 || Mode==1){
-    for(ip=0;ip<Np;ip++){
+    for(ip=0;ip<Nptid;ip++){
       k=8*ip;
-      indp=plsys->Iplanets[ip];
+      indp=plsys->Iplanetstid[ip];
       b=Bodies[indp];
       n=b.n;
     
@@ -1264,9 +1272,9 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
   #ifdef VERBOSE
   fprintf(stdout,"Secular changes:\n");
   fprintf_vec(stdout,"%e ",dydt,NUMVARS*Np);
+  exit(0);
   #endif
 
-  //exit(0);
   return GSL_SUCCESS;
 
 }
