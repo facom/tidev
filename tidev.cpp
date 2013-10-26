@@ -640,8 +640,10 @@ class SecularEvolution
 {
 public:
   int Np;
+  int Nptid;
   double* X;
   int* Iplanets;
+  int* Iplanetstid;
   LaplaceCoefficients **Laplaces;
   LaplaceCoefficients *laplace;
 

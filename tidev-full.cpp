@@ -71,11 +71,14 @@ int main(int argc,char *argv[])
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //LIST OF PLANETS
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  int iplanets[100];
+  int iplanets[100],iplanetstid[100];
   int niplanets=0;
+  int niplanetstid=0;
   for(i=0;i<NBodies;i++){
     if(Bodies[i].active)
       iplanets[niplanets++]=i;
+    if(Bodies[i].tidal)
+      iplanetstid[niplanetstid++]=i;
   }
   if(!niplanets){
     fprintf(stderr,"No planet active.  Please active at least one planet.\n");
