@@ -151,6 +151,7 @@ int main(int argc,char *argv[])
     for(i=0;i<niplanets*NUMVARS;i++)
       fscanf(ft,"%lf",&x[i]);
     fclose(ft);
+    fprintf(stdout,"Creating dump at t = %e\n",tstep);
   }else{
     fprintf(stdout,"No dump.\n");
     for(i=0;i<niplanets;i++){
