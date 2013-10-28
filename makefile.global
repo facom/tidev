@@ -14,25 +14,25 @@
 #######################################################################
 CC=g++
 OPTIM=-O4
-#OPTIM=-g
-CFLAGS=$(OPTIM) -w -c -I. -Iutil/include $(OPTIONS)
-LFLAGS=$(OPTIM) -lm util/lib/libgsl.a util/lib/libgslcblas.a util/lib/libconfig++.a
+CFLAGS=$(OPTIM) -w -c -I. $(OPTIONS)
+LFLAGS=$(OPTIM) -lm -lgsl -lgslcblas -lconfig++
 EDITOR=emacs -nw
 
 %.out:%.o
-	$(CC) $^ $(LFLAGS) -o $@
+	$(CC) $(LFLAGS) $^ -o $@
 
 %.o:%.cpp tidev.cpp
 	$(CC) $(CFLAGS) $< -o $@
 
-cleanout:
-	rm -rf *.out *.o *.exe
-
-clean:cleanout
-	rm -rf *.log *~ *.dump
+clean:
+	rm -rf *.o *.exe *.out *.log *~ \#* *.dump
 	find . -name *~ -exec rm -rf {} \;
+	rm -rf *.png
 
-cleanall:clean cleanout
+cleanout:
+	rm -rf *.out *.o
+
+cleanall:clean
 	rm -rf *.dat
 
 edit: 
@@ -40,4 +40,4 @@ edit:
 
 commit:
 	git commit -am "Commit"
-	git push origin master
+	git push
