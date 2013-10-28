@@ -125,8 +125,8 @@ int main(int argc,char *argv[])
   for(i=0;i<niplanets;i++){
     sprintf(fname,"evolution_%s-%s.dat",secstr,STR(Bodies[iplanets[i]].name));
     fls[i]=fopen(fname,"w");
-    fprintf(fls[i],"%-23s %-23s %-23s %-23s %-23s %-23s\n",
-	    "#1:t","2:a","3:e","4:Omega/n","5:Etid","6:accel");
+    fprintf(fls[i],"%-23s %-23s %-23s %-23s %-23s %-23s %-23s\n",
+	    "#1:t","2:a","3:e","4:Theta","5:Omega/n","6:Etid","7:accel");
 
   }
 
@@ -279,7 +279,7 @@ int main(int argc,char *argv[])
       TauTotal=0.0;
 
       //Columns: 0:t,1:a(0),2:e(1),3:theta(5),4:Omega(6)/n,5:Etid(7)
-      fprintf(fls[i],"%-23.17e %-23.17e %-23.17e %-23.17e %-23.17e %-23.17e\n",
+      fprintf(fls[i],"%-23.17e %-23.17e %-23.17e %-23.17e %-23.17e %-23.17e %-23.17e\n",
 	      tstep,
 	      x[0+k],x[1+k],
 	      x[5+k],x[6+k]/Bodies[ip].n,
