@@ -14,6 +14,7 @@
 //**********************************************************************
 //Use: OPTIONS=-DVERBOSE make <program>.out to enable this macro
 //#define VERBOSE
+
 ////////////////////////////////////////////////////////////////////////
 //HEADERS
 ////////////////////////////////////////////////////////////////////////
@@ -79,6 +80,12 @@ typedef FILE* file;
 ////////////////////////////////////////////////////////////////////////
 //CONSTANTS
 ////////////////////////////////////////////////////////////////////////
+
+//NUMBER OF VARIABLES
+#define NUMVARS 8 //5 elements + theta + omega + Etid
+
+//METHOD OF INTEGRATION
+#define ODEMETHOD gsl_odeiv2_step_rk4 
 
 //NUMERICAL
 //#define PI M_PIl
@@ -221,6 +228,7 @@ PRINT VECTOR
 void fprintf_vec(FILE* stream,const char* fmt,const double x[],int end,int ini=0)
 {
   for(int i=ini;i<end;i++){
+    fprintf(stream,"%d:",i);
     fprintf(stream,fmt,x[i]);
   }
   fprintf(stream,"\n");
@@ -1350,10 +1358,8 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
   #ifdef VERBOSE
   fprintf(stdout,"Secular changes:\n");
   fprintf_vec(stdout,"%e ",dydt,NUMVARS*Np);
-  exit(0);
+  //exit(0);
   #endif
 
   return GSL_SUCCESS;
-
 }
-

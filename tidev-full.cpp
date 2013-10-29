@@ -1,11 +1,13 @@
 //NUMBER OF VARIABLES
-#define NUMVARS 8 //5 elements + theta + omega + Etid
-#define ODEMETHOD gsl_odeiv2_step_rk4 //Integration method
 #include <tidev.cpp>
 
 int main(int argc,char *argv[])
 {
   int i,j;
+  int ip,jp;
+  int k=0;
+  double tini;
+  char fmode[]="w";
 
   ////////////////////////////////////////////////////////////////////////
   //INITIALIZATION
@@ -24,16 +26,19 @@ int main(int argc,char *argv[])
   //MODE
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   configValue(string,mode,"mode");
-  if(!mode.compare("tidal"))
-    Mode=0;
-  else if(!mode.compare("tidal+secular"))
-    Mode=1;
-  else if(!mode.compare("secular"))
-    Mode=2;
+  if(!mode.compare("tidal")) Mode=0;
+  else if(!mode.compare("tidal+secular")) Mode=1;
+  else if(!mode.compare("secular")) Mode=2;
   else{
     fprintf(stderr,"Mode not recognized\n");
     exit(1);
   }
+  char secstr[100];
+  sprintf(secstr,"tidal");
+  if(Mode==1)
+    sprintf(secstr,"tidal+secular");
+  if(Mode==2)
+    sprintf(secstr,"secular");
   fprintf(stdout,"Mode: %s (%d)\n",STR(mode),Mode);
   
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -46,7 +51,7 @@ int main(int argc,char *argv[])
   setUnits(ul,um,ut,uG);
 
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  //BEHAVIOR
+  //HANSEN COEFFICIENTS
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   configValue(string,hansen_coefs,"hansen_coefs");
 
@@ -54,30 +59,15 @@ int main(int argc,char *argv[])
   //PHYSICAL SYSTEM
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   readBodies();
-  #ifdef VERBOSE
-  fprintf(stdout,"Number of bodies:%d\n",NBodies);
-  fprintf(stdout,"Number of planets:%d\n",NPlanets);
-  #endif
   
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //NUMERICAL
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  configValue(real,ftmin,"ftmin");
-  configValue(real,ftmax,"ftmax");
+  configValue(real,ftint,"ftint");
   configValue(real,dtstep,"dtstep");
-  configValue(real,dtdump,"dtdump");
   configValue(real,dtscreen,"dtscreen");
-  configValue(real,tend,"tend");
-
-  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  //MODE
-  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  char secstr[100];
-  sprintf(secstr,"tidal");
-  if(Mode==1)
-    sprintf(secstr,"tidal+secular");
-  if(Mode==2)
-    sprintf(secstr,"secular");
+  configValue(real,dtdump,"dtdump");
+  configValue(real,tint,"tint");
 
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //LIST OF PLANETS
@@ -85,12 +75,20 @@ int main(int argc,char *argv[])
   int iplanets[100],iplanetstid[100];
   int niplanets=0;
   int niplanetstid=0;
-  for(i=0;i<NBodies;i++){
+  fprintf(stdout,"Planets:\n");
+  for(i=1;i<NBodies;i++){
+    fprintf(stdout,"\tPlanet %d %s:",i,STR(Bodies[i].name));
     if(Bodies[i].active){
+      fprintf(stdout,"Active ");
       iplanets[niplanets++]=i;
-      if(Bodies[i].tidal && Mode<=1)
+      if(Bodies[i].tidal && Mode<=1){
 	iplanetstid[niplanetstid++]=i;
+	fprintf(stdout,"Tidal");
+      }
+    }else{
+      fprintf(stdout,"Inactive");
     }
+    fprintf(stdout,"\n");
   }
   if(!niplanets){
     fprintf(stderr,"No planet active.  Please active at least one planet.\n");
@@ -100,16 +98,7 @@ int main(int argc,char *argv[])
     fprintf(stderr,"No planet tidally active.  Please active at least one planet.\n");
     exit(1);
   }
-
-  #ifdef VERBOSE
-  fprintf(stdout,"Integrating planets:");
-  for(i=0;i<niplanets;i++) fprintf(stdout,"%d ",iplanets[i]);
-  fprintf(stdout,"\n");
-  fprintf(stdout,"Tidal planets:");
-  for(i=0;i<niplanetstid;i++) fprintf(stdout,"%d ",iplanetstid[i]);
-  fprintf(stdout,"\n");
-  //exit(0);
-  #endif
+  fprintf(stdout,"Active: %d, Tidal: %d\n",niplanets,niplanetstid);
 
   ////////////////////////////////////////////////////////////////////////
   //ECCENTRICITY FUNCTIONS
@@ -117,47 +106,30 @@ int main(int argc,char *argv[])
   readGEcc(hansen_coefs);
 
   ////////////////////////////////////////////////////////////////////////
-  //PREPARE OUTPUT FILES
-  ////////////////////////////////////////////////////////////////////////
-  FILE** fls;
-  fls=(FILE**)calloc(niplanets,sizeof(FILE*));
-  char fname[100];
-  for(i=0;i<niplanets;i++){
-    sprintf(fname,"evolution_%s-%s.dat",secstr,STR(Bodies[iplanets[i]].name));
-    fls[i]=fopen(fname,"w");
-    fprintf(fls[i],"%-23s %-23s %-23s %-23s %-23s %-23s %-23s\n",
-	    "#1:t","2:a","3:e","4:Theta","5:Omega/n","6:Etid","7:accel");
-
-  }
-
-  ////////////////////////////////////////////////////////////////////////
   //PREPARE INTEGRATOR
   ////////////////////////////////////////////////////////////////////////
   double* x=(double*)calloc(NUMVARS*niplanets,sizeof(double));
+  double* dx=(double*)calloc(NUMVARS*niplanets,sizeof(double));
   double* xout=(double*)calloc(NUMVARS*niplanets,sizeof(double));
   double* dxdt=(double*)calloc(NUMVARS*niplanets,sizeof(double));
-
-  int ip,jp;
-  int k=0;
+  double* dxdti=(double*)calloc(NUMVARS*niplanets,sizeof(double));
 
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
   //INITIAL CONDITIONS
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-  double tstep=0.0;
   FILE* ft;
   if((ft=fopen("evolution.dump","r"))!=NULL){
-    fprintf(stdout,"Initial conditions from dump.\n");
-    fscanf(ft,"%lf",&tstep);
-    for(i=0;i<niplanets*NUMVARS;i++)
-      fscanf(ft,"%lf",&x[i]);
+    sprintf(fmode,"a");
+    fscanf(ft,"%lf",&tini);
+    fprintf(stdout,"Initial conditions from dump with tini = %e yrs.\n",tini);
+    for(i=0;i<niplanets*NUMVARS;i++) fscanf(ft,"%lf",&x[i]);
+    for(i=0;i<niplanets*NUMVARS;i++) fscanf(ft,"%lf",&dxdti[i]);
     fclose(ft);
-    fprintf(stdout,"Creating dump at t = %e\n",tstep);
   }else{
     fprintf(stdout,"No dump.\n");
     for(i=0;i<niplanets;i++){
       k=8*i;
       ip=iplanets[i];
-
       //0:a
       x[0+k]=Bodies[ip].a;
       //1:e
@@ -174,16 +146,27 @@ int main(int argc,char *argv[])
       x[6+k]=2*PI/Bodies[ip].Pini;
       //7:Etid
       x[7+k]=0.0;
-      fprintf(stdout,"Planet %d (%d,%s) state vector:",i,ip,STR(Bodies[ip].name));
-      fprintf_vec(stdout,"%e ",x,(i+1)*NUMVARS,k);
     }
+    memset(dxdti,0,niplanets*NUMVARS*sizeof(dxdt[0]));
   }
-  fprintf(stdout,"Full state vector:");
-  fprintf_vec(stdout,"%e ",x,NUMVARS*niplanets);
-  //exit(0);
 
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-  //INITIALIZE KEY VARIABLES
+  //CREATING OUTPUT FILES
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  char fname[100];
+  FILE** fls;
+  fls=(FILE**)calloc(niplanets,sizeof(FILE*));
+  fprintf(stdout,"Creating output files in mode '%s':\n",fmode);
+  for(i=0;i<niplanets;i++){
+    sprintf(fname,"evolution_%s-%s.dat",secstr,STR(Bodies[iplanets[i]].name));
+    fprintf(stdout,"\tFile: %s\n",fname);
+    fls[i]=fopen(fname,fmode);
+    fprintf(fls[i],"%-23s %-23s %-23s %-23s %-23s %-23s %-23s\n",
+	    "#1:t","2:a","3:e","4:Theta","5:Omega/n","6:Etid","7:accel");
+  }
+
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  //INITIALIZING LAPLACE COEFFICIENTS
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
   double alpha;
   LC** Laps=laplaceAlloc(niplanets,niplanets);
@@ -192,7 +175,6 @@ int main(int argc,char *argv[])
     for(j=i+1;j<niplanets;j++){
       jp=iplanets[j];
       alpha=ALPHA(Bodies[ip].a,Bodies[jp].a);
-      fprintf(stdout,"i=%d (ip=%d), j=%d (jp=%d): alpha = %e\n",i,ip,j,jp,alpha);
 
       Laps[i][j].set(alpha,Bodies[ip].M);
       Laps[i][j].coefcs();
@@ -207,68 +189,92 @@ int main(int argc,char *argv[])
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
   SecularEvolution plsys;
   plsys.set(niplanets,iplanets,niplanetstid,iplanetstid,x,Laps);
-  /*
-  plsys.secular(dxdt);
-  fprintf_vec(stdout,"%e ",dxdt,NUMVARS*niplanets);
-  */
 
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
   //INITIALIZE SYSTEM
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
   gsl_odeiv2_system sys={tidalAcceleration,NULL,NUMVARS*niplanets,&plsys};
-  gsl_odeiv2_driver* driver=gsl_odeiv2_driver_alloc_y_new(&sys,ODEMETHOD,1E-3,0,1E-6);
-  
+  gsl_odeiv2_step* step=gsl_odeiv2_step_alloc(ODEMETHOD,NUMVARS*niplanets);
+
   ////////////////////////////////////////////////////////////////////////
   //RUN INTEGRATION
   ////////////////////////////////////////////////////////////////////////
+  double t,tstep;
+
   int status;
   real accel,Etid;
-  real t=tstep;
-  int NT=0;
-  double TINI,T1,T2,TIME,TEND,TAVG;
-  double Prot,Protmin,dtmin,dtmax;
-  double TauTotal;
-    
-  TINI=T1=Time();
-  for(tstep=tstep+dtstep;tstep<tend;tstep+=dtstep){
 
-    //STEP SIZE
+  double Prot,Protmin,dtint;
+  double h;
+  int nstep;
+
+  int NT=0;
+  double TINI,T1,T2,TIME,TEND,TAVG=0;
+  TINI=T1=Time();
+
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  //INITIAL REPORT
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  fprintf(stdout,"Integration properties:\n");
+  fprintf(stdout,"\ttini = %.2e yrs\n",tini);
+  fprintf(stdout,"\t\tdtint/Pmin = %.2e\n",ftint);
+  fprintf(stdout,"\t\tdtstep = %.2e yrs\n",dtstep);
+  fprintf(stdout,"\t\tdtscreen = %.2e yrs\n",dtscreen);
+  fprintf(stdout,"\t\tdtstep = %.2e yrs\n",dtstep);
+  fprintf(stdout,"\t\tdtdump = %.2e yrs\n",dtdump);
+  fprintf(stdout,"\ttint = %.2e yrs\n",tint);
+  fprintf(stdout,"\ttend = %.2e yrs\n",tini+tint);
+  
+  fprintf(stdout,"Integration starts at: tstep = %e yrs\n",tini);
+
+  tstep=tini;
+  do{
+    //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+    //CHOOSE STEP SIZE
+    //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     Protmin=1E100;
     for(i=0;i<niplanets;i++){
       k=8*i;
       Prot=2*PI/x[6+k];
       Protmin=Prot<=Protmin?Prot:Protmin;
     }
-    dtmin=ftmin*Protmin;
-    dtmax=ftmax*Protmin;
-    gsl_odeiv2_driver_set_hmin(driver,dtmin);
-    gsl_odeiv2_driver_set_hmax(driver,dtmax);
+    dtint=ftint*Protmin;
 
-    fprintf(stdout,"\nIntegrating at t = %e: dtmin = %e, dtmax = %e (Mode = %s)...\n",t,dtmin,dtmax,STR(mode));
-
-    #ifdef VERBOSE
-    fprintf(stdout,"Initial state at t = %e:\n",t);
-    fprintf_vec(stdout,"%e ",x,NUMVARS*niplanets);
-    #endif
-  
+    //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     //STEP
-    status=gsl_odeiv2_driver_apply(driver,&t,tstep,x);
+    //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+    nstep=(int)(dtstep/dtint);
+    h=dtstep/nstep;
+    t=tstep;
+    do{
+      status=gsl_odeiv2_step_apply(step,t,h,x,dx,dxdti,dxdt,&sys);
+      t+=h;
+    }while((t-tstep)<dtstep);
+    for(i=0;i<niplanets*NUMVARS;i++) dxdt[i]=dxdti[i];
     
-    //COMPUTE ACCELERATION AND DISSIPATED ENERGY
-    tidalAcceleration(tstep,x,dxdt,&plsys);
+    //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+    //INCREASING
+    //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+    tstep+=dtstep;
 
-    #ifdef VERBOSE
-    fprintf(stdout,"Last state:\n");
-    fprintf_vec(stdout,"%e ",x,NUMVARS*niplanets);
-    fprintf(stdout,"Last derivative:\n");
-    fprintf_vec(stdout,"%e ",dxdt,NUMVARS*niplanets);
-    fprintf(stdout,"Time = %e secs\n",(Time()-TINI)*MICRO);
-    exit(0);
-    #endif
+    //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+    //DUMP
+    //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+    if(fmod(tstep,dtdump)<1E-5){
+      ft=fopen("evolution.dump","w");
+      fprintf(ft,"%-23.17e ",tstep);
+      for(i=0;i<niplanets*NUMVARS;i++)
+	fprintf(ft,"%-23.17e ",x[i]);
+      for(i=0;i<niplanets*NUMVARS;i++)
+	fprintf(ft,"%-23.17e ",dxdt[i]);
+      fclose(ft);
+    }
 
+    //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     //STORE RESULT
+    //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     for(i=0;i<niplanets;i++){
-      k=8*i;
+      k=NUMVARS*i;
       ip=iplanets[i];
 
       //Energy dissipated
@@ -276,7 +282,6 @@ int main(int argc,char *argv[])
 
       //Total tidal acceleration
       accel=dxdt[6+k];
-      TauTotal=0.0;
 
       //Columns: 0:t,1:a(0),2:e(1),3:theta(5),4:Omega(6)/n,5:Etid(7)
       fprintf(fls[i],"%-23.17e %-23.17e %-23.17e %-23.17e %-23.17e %-23.17e %-23.17e\n",
@@ -285,53 +290,38 @@ int main(int argc,char *argv[])
 	      x[5+k],x[6+k]/Bodies[ip].n,
 	      Etid,accel);
       fflush(fls[i]);
-
     }
 
-    //STORE DUMP
-    if(fmod(tstep,dtdump)<1E-5){
-      ft=fopen("evolution.dump","w");
-      fprintf(ft,"%-23.17e ",tstep);
-      for(i=0;i<niplanets*NUMVARS;i++)
-	fprintf(ft,"%-23.17e ",x[i]);
-      fclose(ft);
-    }
-
-    //STORE IN OUTPUT FILE
-    if(fmod(tstep,dtscreen)<1E-5){
+    //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+    //SCREEN
+    //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+    if(fmod((tstep-tini),dtscreen)<1E-5){
       T2=Time();
       TIME=(T2-T1)*MICRO;
-
-      for(i=0;i<niplanets;i++){
-	k=8*i;
-	ip=iplanets[i];
-	
-	//Energy dissipated
-	Etid=x[7+k]*(UM*UL*UL/(UT*UT));
-	
-	//Total tidal acceleration
-	accel=dxdt[6+k];
-	TauTotal=0.0;
-	
-	//Columns: 0:t,1:a(0),2:e(1),3:theta(5),4:Omega(6)/n,5:Etid(7)
-	fprintf(stdout,"Planet %d (%d,%s):\n",i,ip,STR(Bodies[ip].name));
-	fprintf(stdout,"\tt = %.17e, a = %.17e, e = %.17e, theta = %.17e, Omega/n = %.17e, Etid = %.17e, accel = %.17e, step = %.17e secs, cumulative = %.17e secs\n",
-		tstep,
-		x[0+k],x[1+k],
-		x[5+k],x[6+k]/Bodies[ip].n,
-		Etid,accel,
-		TIME,(T2-TINI)*MICRO
-		);
-      }
-
-      if(t>dtstep){
+      fprintf(stdout,
+	      "\tt = %.2e, Timing: Timestep = %.2e secs, Cumulative = %.2e secs\n",
+	      tstep,TIME,(T2-TINI)*MICRO);
+      if(tstep>(tini+dtstep)){
 	TAVG+=TIME;
 	NT++;
       }
       T1=Time();
     }
-    //exit(0);
-  }
+  }while((tstep-tini)<tint);
+  fprintf(stdout,"Integration ends at: tstep = %e yrs\n",tstep);
+
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  //DUMPING
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  ft=fopen("evolution.dump","w");
+  fprintf(ft,"%-23.17e ",tstep);
+  for(i=0;i<niplanets*NUMVARS;i++) fprintf(ft,"%-23.17e ",x[i]);
+  for(i=0;i<niplanets*NUMVARS;i++) fprintf(ft,"%-23.17e ",dxdt[i]);
+  fclose(ft);
+
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  //TIMING
+  //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
   TEND=Time();
   TAVG/=NT;
   printf("Average time: %e secs\n",TAVG);

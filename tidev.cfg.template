@@ -8,8 +8,8 @@
 ////////////////////////////////////////////////////////////////////////
 //Modes:tidal,tidal+secular,secular
 //mode="tidal";
-//mode="tidal+secular";
-mode="secular";
+mode="tidal+secular";
+//mode="secular";
 
 ////////////////////////////////////////////////////////////////////////
 //UNITS
@@ -23,20 +23,19 @@ uG=0.0; //Compute
 //INTEGRATION
 ////////////////////////////////////////////////////////////////////////
 //Internal time-step
-ftmin = 0.1; //Minimum Prot
-ftmax = 0.5; //Minimum Prot
+ftint = 0.5; //x Prot
 
 //Output time-step
 dtstep = 1.0E2; //ut
 
 //Screen time-step
-dtscreen = 1.0E2; //ut
+dtscreen = 1.0E3; //ut
 
 //Dump time-step
 dtdump = 1.0E3; //ut
 
-//Final time
-tend = 1.0E4; //ut
+//Integration time
+tint = 3.0E3; //ut
 
 ////////////////////////////////////////////////////////////////////////
 //BODY PROPERTIES
@@ -97,7 +96,7 @@ bodies = (
     active = 1;
 
     //Compute tidal?
-    tidal = 1;
+    tidal = 0;
 
     //Basic
     name = "c";
@@ -136,7 +135,7 @@ bodies = (
     active = 0;
 
     //Compute tidal?
-    tidal = 1;
+    tidal = 0;
 
     //Basic
     name = "d";
@@ -175,7 +174,7 @@ bodies = (
     active = 0;
 
     //Compute tidal?
-    tidal = 1;
+    tidal = 0;
 
     //Basic
     name = "e";
@@ -214,7 +213,7 @@ bodies = (
     active = 0;
 
     //Compute tidal?
-    tidal = 1;
+    tidal = 0;
 
     //Basic
     name = "f";
@@ -253,7 +252,7 @@ bodies = (
     active = 0;
 
     //Compute tidal?
-    tidal = 1;
+    tidal = 0;
 
     //Basic
     name = "g";
