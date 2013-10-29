@@ -25,18 +25,21 @@ EDITOR=emacs -nw
 %.o:%.cpp tidev.cpp
 	$(CC) $(CFLAGS) $< -o $@
 
-run:
-	./tidev-full.out 
-
 cleanout:
 	rm -rf *.out *.o *.exe
+
+cleandump:
+	rm -rf *.dump
+
+compile:
+	make tidev-full.out
+
+run:
+	./tidev-full.out 
 
 clean:cleanout
 	rm -rf *.log *~ *.dump
 	find . -name *~ -exec rm -rf {} \;
-
-cleandump:
-	rm -rf *.dump
 
 cleanall:clean cleanout cleandump
 	rm -rf *.dat

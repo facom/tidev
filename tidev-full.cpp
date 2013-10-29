@@ -3,6 +3,8 @@
 
 int main(int argc,char *argv[])
 {
+  FILE *ff;
+  int qdynamic;
   int i,j;
   int ip,jp;
   int k=0;
@@ -112,7 +114,6 @@ int main(int argc,char *argv[])
   double* dx=(double*)calloc(NUMVARS*niplanets,sizeof(double));
   double* xout=(double*)calloc(NUMVARS*niplanets,sizeof(double));
   double* dxdt=(double*)calloc(NUMVARS*niplanets,sizeof(double));
-  double* dxdti=(double*)calloc(NUMVARS*niplanets,sizeof(double));
 
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
   //INITIAL CONDITIONS
@@ -123,7 +124,6 @@ int main(int argc,char *argv[])
     fscanf(ft,"%lf",&tini);
     fprintf(stdout,"Initial conditions from dump with tini = %e yrs.\n",tini);
     for(i=0;i<niplanets*NUMVARS;i++) fscanf(ft,"%lf",&x[i]);
-    for(i=0;i<niplanets*NUMVARS;i++) fscanf(ft,"%lf",&dxdti[i]);
     fclose(ft);
   }else{
     fprintf(stdout,"No dump.\n");
@@ -147,7 +147,6 @@ int main(int argc,char *argv[])
       //7:Etid
       x[7+k]=0.0;
     }
-    memset(dxdti,0,niplanets*NUMVARS*sizeof(dxdt[0]));
   }
 
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -247,10 +246,9 @@ int main(int argc,char *argv[])
     h=dtstep/nstep;
     t=tstep;
     do{
-      status=gsl_odeiv2_step_apply(step,t,h,x,dx,dxdti,dxdt,&sys);
+      status=gsl_odeiv2_step_apply(step,t,h,x,dx,NULL,dxdt,&sys);
       t+=h;
     }while((t-tstep)<dtstep);
-    for(i=0;i<niplanets*NUMVARS;i++) dxdt[i]=dxdti[i];
     
     //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     //INCREASING
@@ -306,6 +304,19 @@ int main(int argc,char *argv[])
 	NT++;
       }
       T1=Time();
+
+      //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+      //ACCELERATE
+      //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+      configLoad("dynamic.cfg");
+      qdynamic=CFG.lookup("dynamic");
+      if(qdynamic){
+	ftint=CFG.lookup("ftint");
+	dtstep=CFG.lookup("dtstep");
+	dtscreen=CFG.lookup("dtscreen");
+	dtdump=CFG.lookup("dtdump");
+	tint=CFG.lookup("tint");
+      }
     }
   }while((tstep-tini)<tint);
   fprintf(stdout,"Integration ends at: tstep = %e yrs\n",tstep);
@@ -316,7 +327,6 @@ int main(int argc,char *argv[])
   ft=fopen("evolution.dump","w");
   fprintf(ft,"%-23.17e ",tstep);
   for(i=0;i<niplanets*NUMVARS;i++) fprintf(ft,"%-23.17e ",x[i]);
-  for(i=0;i<niplanets*NUMVARS;i++) fprintf(ft,"%-23.17e ",dxdt[i]);
   fclose(ft);
 
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
