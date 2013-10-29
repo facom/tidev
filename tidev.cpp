@@ -1256,13 +1256,11 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
 
   if(Mode==0 || Mode==1){
     for(ip=0;ip<Nptid;ip++){
-      k=8*ip;
+      k=NUMVARS*ip;
       indp=plsys->Iplanetstid[ip];
       b=Bodies[indp];
       n=b.n;
     
-      //fprintf(stdout,"Body %d (%d,%s):\n",ip,indp,STR(b.name));
-
       ////////////////////////////////
       //d theta / dt = omega
       ////////////////////////////////

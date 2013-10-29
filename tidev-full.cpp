@@ -157,7 +157,8 @@ int main(int argc,char *argv[])
   fls=(FILE**)calloc(niplanets,sizeof(FILE*));
   fprintf(stdout,"Creating output files in mode '%s':\n",fmode);
   for(i=0;i<niplanets;i++){
-    sprintf(fname,"evolution_%s-%s.dat",secstr,STR(Bodies[iplanets[i]].name));
+    //sprintf(fname,"evolution_%s-%s.dat",secstr,STR(Bodies[iplanets[i]].name));
+    sprintf(fname,"evolution-%s.dat",STR(Bodies[iplanets[i]].name));
     fprintf(stdout,"\tFile: %s\n",fname);
     fls[i]=fopen(fname,fmode);
     fprintf(fls[i],"%-23s %-23s %-23s %-23s %-23s %-23s %-23s\n",
@@ -203,7 +204,7 @@ int main(int argc,char *argv[])
   int status;
   real accel,Etid;
 
-  double Prot,Protmin,dtint;
+  double nP,Prot,Protmin,dtint;
   double h;
   int nstep;
 
@@ -227,18 +228,21 @@ int main(int argc,char *argv[])
   fprintf(stdout,"Integration starts at: tstep = %e yrs\n",tini);
 
   tstep=tini;
+
   do{
     //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     //CHOOSE STEP SIZE
     //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     Protmin=1E100;
     for(i=0;i<niplanets;i++){
-      k=8*i;
+      ip=iplanets[i];
+      k=NUMVARS*i;
       Prot=2*PI/x[6+k];
-      Protmin=Prot<=Protmin?Prot:Protmin;
+      if((Bodies[ip].tidal && Mode<=1)||Mode==2)
+	Protmin=Prot<=Protmin?Prot:Protmin;
     }
     dtint=ftint*Protmin;
-
+  
     //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     //STEP
     //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
