@@ -1,8 +1,0 @@
-#Plot data
-set term png
-set output "orbtidal-nocoupled.png"
-plot "orbtidal-nocoupled_c.dat" u 1:5, "orbtidal-nocoupled_b.dat" u 1:5
-
-set output "orbtidal-coupled.png"
-plot "orbtidal-coupled_c.dat" u 1:5, "orbtidal-coupled_b.dat" u 1:5
-
