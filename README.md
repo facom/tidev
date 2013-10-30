@@ -17,6 +17,8 @@ Quick start
 
 2. Install dependencies:
 
+   You can install dependencies in the system:
+
        $ sudo apt-get install libgsl0-dev libgsl0ldbl
 
        $ sudo apt-get install libconfig++8 libconfig++-dev
@@ -31,6 +33,16 @@ Quick start
    You should be sure that binary libraries and header files from both
    dependencies are properly placed into the util/include and util/lib
    directories.
+
+   Latest realease of the package include sources for gsl and
+   libconfig.  To install them and compile the package follow the
+   procedure:
+
+   a. Untar sources:
+
+      $ cd util/src
+      $ tar zxvf <gsl_sources>.tgz
+      $ tar zxvf <libconfig_sources>.tgz
 
 3. Configure system:
 
