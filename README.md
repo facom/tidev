@@ -41,13 +41,17 @@ Quick start
    a. Untar sources:
 
       $ cd util/src
+
       $ tar zxvf <gsl_sources>.tgz
+
       $ tar zxvf <libconfig_sources>.tgz
 
    b. Configure, compile and install (locally):
 
       $ cd <package>
+
       $ ./configure --prefix=$(pwd) && make && make install
+
       $ cd ..
 
       Where <package> is each of the installed dependencies (gsl and libconfig)
@@ -55,7 +59,9 @@ Quick start
    c. Copy library and header to local directories:
 
       $ cd <package>
+
       $ cp -rf lib/* ../../lib
+
       $ cp -rf include/* ../../include
 
 3. Configure system:
