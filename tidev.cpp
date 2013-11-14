@@ -1,18 +1,18 @@
-//**********************************************************************
+// **********************************************************************
 //   _______     ________     
 //  /_  __(_)___/ / ____/   __
 //   / / / / __  / __/ | | / /
 //  / / / / /_/ / /___ | |/ / 
 // /_/ /_/\__,_/_____/ |___/  
 // Tidal Spin Evolution
-//**********************************************************************
+// **********************************************************************
 // Copyright (C) 2013 
 // Jorge Zuluaga (zuluagajorge@gmail.com, Mario Melita (melita@iafe.uba.ar)
 // Pablo Cuartas (quarktas@gmail.com), Bayron Portilla (bayron@gmail.com)
-//**********************************************************************
+// **********************************************************************
 // MAIN PACKAGE FILE
-//**********************************************************************
-//Use: OPTIONS=-DVERBOSE make <program>.out to enable this macro
+// **********************************************************************
+// Use: OPTIONS=-DVERBOSE make <program>.out to enable this macro
 //#define VERBOSE
 
 ////////////////////////////////////////////////////////////////////////
@@ -153,7 +153,7 @@ public:
   real mu;
   real a,e;
   real n,P;
-  real i,xi,Om,w;
+  real I,Om,w;
   real gmt;//1.5*G*Ms^2*R^5/(a^6)
 
   //Momentum of Inertia: C: main, A,B: secondary
@@ -301,8 +301,7 @@ int readBodies(void)
 
     configValueList(bodies[i],Bodies[i].a,"a");
     configValueList(bodies[i],Bodies[i].e,"e");
-    configValueList(bodies[i],Bodies[i].i,"i");
-    configValueList(bodies[i],Bodies[i].xi,"xi");
+    configValueList(bodies[i],Bodies[i].I,"I");
     configValueList(bodies[i],Bodies[i].Om,"Om");
     configValueList(bodies[i],Bodies[i].w,"w");
 
@@ -1208,6 +1207,11 @@ public:
     }
     return 0;
   }
+
+  int secular2(double *dxdt)
+  {
+    return 0;
+  }//END SECULAR 2 
   
 };
 int secularFunction(double t,const double y[],double yp[],void *param)

@@ -66,6 +66,7 @@ int main(int argc,char *argv[])
   //NUMERICAL
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   configValue(real,ftint,"ftint");
+  configValue(real,ftorb,"ftorb");
   configValue(real,dtstep,"dtstep");
   configValue(real,dtscreen,"dtscreen");
   configValue(real,dtdump,"dtdump");
@@ -134,15 +135,15 @@ int main(int argc,char *argv[])
       x[0+k]=Bodies[ip].a;
       //1:e
       x[1+k]=Bodies[ip].e;
-      //2:xi
-      x[2+k]=Bodies[ip].xi*D2R;
+      //2:Inclination
+      x[2+k]=Bodies[ip].I*D2R;
       //3:Omega
       x[3+k]=Bodies[ip].Om*D2R;
       //4:w + Omega
       x[4+k]=fmod((Bodies[ip].w+Bodies[ip].Om)*D2R,2*PI);
       //5:theta
       x[5+k]=Bodies[ip].thetaini;
-      //6:omega
+      //6:omega_rot
       x[6+k]=2*PI/Bodies[ip].Pini;
       //7:Etid
       x[7+k]=0.0;
@@ -161,8 +162,8 @@ int main(int argc,char *argv[])
     sprintf(fname,"evolution-%s.dat",STR(Bodies[iplanets[i]].name));
     fprintf(stdout,"\tFile: %s\n",fname);
     fls[i]=fopen(fname,fmode);
-    fprintf(fls[i],"%-23s %-23s %-23s %-23s %-23s %-23s %-23s\n",
-	    "#1:t","2:a","3:e","4:Theta","5:Omega/n","6:Etid","7:accel");
+    fprintf(fls[i],"%-23s %-23s %-23s %-23s %-23s %-23s %-23s %-23s %-23s %-23s\n",
+	    "#1:t","2:a","3:e","4:I","5:Om","6:w+Om","7:Theta","8:Omega/n","9:Etid","10:accel");
   }
 
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -204,7 +205,7 @@ int main(int argc,char *argv[])
   int status;
   real accel,Etid;
 
-  double nP,Prot,Protmin,dtint;
+  double nP,Prot,Protmin,aorb,norb,Porb,Porbmin,dtint=0;
   double h;
   int nstep;
 
@@ -215,9 +216,12 @@ int main(int argc,char *argv[])
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
   //INITIAL REPORT
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  if(ftint==0 && ftorb==0) dtint=dtstep;
   fprintf(stdout,"Integration properties:\n");
   fprintf(stdout,"\ttini = %.2e yrs\n",tini);
-  fprintf(stdout,"\t\tdtint/Pmin = %.2e\n",ftint);
+  fprintf(stdout,"\t\tdtint/Pmin = %.2e\n",ftint); 
+  fprintf(stdout,"\t\tdtint/Porb = %.2e\n",ftorb);
+  fprintf(stdout,"\t\tdtint = %.2e yrs\n",dtint);
   fprintf(stdout,"\t\tdtstep = %.2e yrs\n",dtstep);
   fprintf(stdout,"\t\tdtscreen = %.2e yrs\n",dtscreen);
   fprintf(stdout,"\t\tdtstep = %.2e yrs\n",dtstep);
@@ -233,16 +237,29 @@ int main(int argc,char *argv[])
     //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     //CHOOSE STEP SIZE
     //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-    Protmin=1E100;
-    for(i=0;i<niplanets;i++){
-      ip=iplanets[i];
-      k=NUMVARS*i;
-      Prot=2*PI/x[6+k];
-      if((Bodies[ip].tidal && Mode<=1)||Mode==2)
-	Protmin=Prot<=Protmin?Prot:Protmin;
+    if(ftint>0){
+      Protmin=1E100;
+      for(i=0;i<niplanets;i++){
+	ip=iplanets[i];
+	k=NUMVARS*i;
+	Prot=2*PI/x[6+k];
+	if((Bodies[ip].tidal && Mode<=1)||Mode==2)
+	  Protmin=Prot<=Protmin?Prot:Protmin;
+      }
+      dtint=ftint*Protmin;
     }
-    dtint=ftint*Protmin;
-  
+    else if(ftorb>0){
+      Porbmin=1E100;
+      for(i=0;i<niplanets;i++){
+	ip=iplanets[i];
+	k=NUMVARS*i;
+	aorb=x[0+k];
+	Porb=Bodies[ip].P;
+	Porbmin=Porb<=Porbmin?Porb:Porbmin;
+      }
+      dtint=ftorb*Porbmin;
+    }
+
     //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     //STEP
     //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -284,13 +301,27 @@ int main(int argc,char *argv[])
 
       //Total tidal acceleration
       accel=dxdt[6+k];
+      
+      //Period and n
+      aorb=x[0+k];
+      Porb=2*PI*sqrt((aorb*aorb*aorb)/Bodies[ip].mu);
+      norb=2*PI/Porb;
+      Bodies[ip].P=Porb;
+      Bodies[ip].n=norb;
 
       //Columns: 0:t,1:a(0),2:e(1),3:theta(5),4:Omega(6)/n,5:Etid(7)
-      fprintf(fls[i],"%-23.17e %-23.17e %-23.17e %-23.17e %-23.17e %-23.17e %-23.17e\n",
+      fprintf(fls[i],"%-23.17e %-23.17e %-23.17e %-23.17e %-23.17e %-23.17e %-23.17e %-23.17e %-23.17e %-23.17e\n",
 	      tstep,
-	      x[0+k],x[1+k],
-	      x[5+k],x[6+k]/Bodies[ip].n,
-	      Etid,accel);
+	      x[0+k],/*a*/
+	      x[1+k],/*e*/
+	      x[2+k],/*I*/
+	      x[3+k],/*Om*/
+	      x[4+k],/*w+Om*/
+	      x[5+k],/*theta*/
+	      x[6+k]/Bodies[ip].n,/*Omega/n*/
+	      Etid,/*Tidal energy*/
+	      accel/*Tidal total acceleration*/
+	      );
       fflush(fls[i]);
     }
 
@@ -301,8 +332,8 @@ int main(int argc,char *argv[])
       T2=Time();
       TIME=(T2-T1)*MICRO;
       fprintf(stdout,
-	      "\tt = %.2e, Timing: Timestep = %.2e secs, Cumulative = %.2e secs\n",
-	      tstep,TIME,(T2-TINI)*MICRO);
+	      "\tt = %.2e, h = %.2e, nsteps = %d. Timing: Timestep = %.2e secs, Cumulative = %.2e secs\n",
+	      tstep,dtint,nstep,TIME,(T2-TINI)*MICRO);
       if(tstep>(tini+dtstep)){
 	TAVG+=TIME;
 	NT++;
