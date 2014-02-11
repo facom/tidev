@@ -164,7 +164,7 @@ public:
   int physicalProperties(){
     //Mean density
     if(R>0){
-      rho=M/(4*PI*R*R*R);
+      rho=M/(4*PI*R*R*R/3);
     }else rho=0;
 
     //Moment of inertia
@@ -1337,9 +1337,17 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
       ////////////////////////////////
       //d e / dt:
       ////////////////////////////////
+      
+      //%%%%%%%%%%%%%%%%%%%%
+      //TORQUE CONTRIB.
+      //%%%%%%%%%%%%%%%%%%%%
       dydt[1+k]=
 	1/(2*b.a)*((1-b.e*b.e)*dota/2-(1/b.M)*sqrt(b.a*(1-b.e*b.e)/b.mu)*tauTidal);
 
+      //%%%%%%%%%%%%%%%%%%%%
+      //SECULAR CONTRIB.
+      //%%%%%%%%%%%%%%%%%%%%
+      
       #ifdef VERBOSE
       fprintf(stdout,"Tidal changes:\n");
       fprintf_vec(stdout,"%e ",dydt,NUMVARS*Np);
@@ -1349,6 +1357,7 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
       #endif
     }
   }
+
   ////////////////////////////////
   //Secular Contribution
   ////////////////////////////////
@@ -1356,7 +1365,7 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
     plsys->update(y);
     plsys->secular(dydt);
   } 
-
+  
   #ifdef VERBOSE
   fprintf(stdout,"Secular changes:\n");
   fprintf_vec(stdout,"%e ",dydt,NUMVARS*Np);
