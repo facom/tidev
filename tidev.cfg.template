@@ -25,6 +25,9 @@ uG=0.0; //Compute
 //Internal time-step
 ftint = 0.5; //x Prot
 
+//Fraction of the orbit 
+ftorb = 0.0; //0 to make it automatic
+
 //Output time-step
 dtstep = 1.0E2; //ut
 
