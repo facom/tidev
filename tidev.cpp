@@ -145,7 +145,7 @@ public:
 
   //Rheological
   real mur,alpha,tauM,tauA;
-  real thetaini,Pini;
+  real thetaini,Pini,Wini;
   real gapo,cosapt,sinapt;//Alpha functions 
   real A2;//A_2
   
@@ -315,6 +315,7 @@ int readBodies(void)
 
     configValueList(bodies[i],Bodies[i].thetaini,"thetaini");
     configValueList(bodies[i],Bodies[i].Pini,"Pini");
+    configValueList(bodies[i],Bodies[i].Wini,"Wini");
     
     //Adjust units
     Bodies[i].setUnits();
@@ -322,7 +323,17 @@ int readBodies(void)
     //Compute derived properties
     Bodies[i].mu=GPROG*Bodies[0].M;
     Bodies[i].physicalProperties();
+
+    //printf("%f\n",Bodies[i].a);
+
     Bodies[i].orbitalProperties();
+
+    //Orbital period in physical units
+    if(Bodies[i].Pini<0){
+      Bodies[i].Pini=Bodies[i].P/Bodies[i].Wini;
+    }
+    //printf("%e %e %e\n",Bodies[i].Wini,Bodies[i].Pini,Bodies[i].P);
+
     Bodies[i].rheologyProperties();
   }
 
