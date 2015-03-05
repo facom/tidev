@@ -8,8 +8,8 @@
 ////////////////////////////////////////////////////////////////////////
 //Modes:tidal,tidal+secular,secular
 //mode="tidal";
-mode="tidal+secular";
 //mode="secular";
+mode="tidal";
 
 ////////////////////////////////////////////////////////////////////////
 //UNITS
@@ -29,7 +29,7 @@ ftint = 0.5; //x Prot
 ftorb = 0.0; //0 to make it automatic
 
 //Output time-step
-dtstep = 1.0E2; //ut
+dtstep = 1.0; //ut
 
 //Screen time-step
 dtscreen = 1.0E3; //ut
@@ -72,7 +72,7 @@ bodies = (
     
     //Orbital
     a = 0.0505;//ul
-    e = 0.13;
+    e = 0.34;
     i = 1E-3;
     xi = 1E-3;
     Om = 1E-3;
@@ -89,14 +89,21 @@ bodies = (
     tauA=50.0; //Viscoelatic Maxwell time: years
 
     //Initial conditions
-    thetaini=0.0;//degrees
-    Pini=24.0;//hours
+    thetaini=90.0;//degrees
+
+    //Rotation period in physical units. If you want relative use -1
+    //Pini=24.0;//hours
+    Pini=-1.0;
+    
+    //Rotational rate in units of orbital angular velocity
+    Wini=2.6;//x n
+
   },
   
   //PLANET c
   {
     //Activate?
-    active = 1;
+    active = 0;
 
     //Compute tidal?
     tidal = 0;
@@ -130,6 +137,9 @@ bodies = (
     //Initial conditions
     thetaini=0.0;//degrees
     Pini=100.0;//hours
+
+    //Rotational rate in units of orbital angular velocity
+    Wini=1.0;//x n
   },
 
   //PLANET d
@@ -169,6 +179,9 @@ bodies = (
     //Initial conditions
     thetaini=0.0;//degrees
     Pini=24.0;//hours
+
+    //Rotational rate in units of orbital angular velocity
+    Wini=1.0;//x n
   },
 
   //PLANET e
@@ -208,6 +221,9 @@ bodies = (
     //Initial conditions
     thetaini=0.0;//degrees
     Pini=24.0;//hours
+
+    //Rotational rate in units of orbital angular velocity
+    Wini=1.0;//x n
   },
 
   //PLANET f
@@ -247,6 +263,9 @@ bodies = (
     //Initial conditions
     thetaini=0.0;//degrees
     Pini=24.0;//hours
+
+    //Rotational rate in units of orbital angular velocity
+    Wini=1.0;//x n
   },
 
   //PLANET g
@@ -286,6 +305,9 @@ bodies = (
     //Initial conditions
     thetaini=0.0;//degrees
     Pini=24.0;//hours
+
+    //Rotational rate in units of orbital angular velocity
+    Wini=1.0;//x n
   }
 
 );
