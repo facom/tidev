@@ -10,6 +10,7 @@ param_vec=np.linspace(conf["param_ini"],conf["param_end"],
                       conf["nrun"])
 
 #GENERATE RUN FILES
+system("rm -r runs/run*")
 for i in xrange(conf["nrun"]):
     paramval=param_vec[i]
 
@@ -17,7 +18,7 @@ for i in xrange(conf["nrun"]):
     system("rm -rf runs/run_%s"%suffix)
     system("cp -rf runs/template runs/run_%s"%suffix)
     
-    #READ FILE
+    #CREATE CONFIGURATION FILE
     filecfg=open("runs/run_%s/tidev.cfg"%suffix,"w")
     fc=open("tidev.cfg")
     for line in fc:
@@ -26,3 +27,6 @@ for i in xrange(conf["nrun"]):
             line="%s = %.17e;"%(conf["param"],paramval)
         filecfg.write(line)
     filecfg.close()
+
+    #CREATE LAUNCHING SCRIPT
+

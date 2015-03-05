@@ -316,6 +316,9 @@ int readBodies(void)
     configValueList(bodies[i],Bodies[i].thetaini,"thetaini");
     configValueList(bodies[i],Bodies[i].Pini,"Pini");
     configValueList(bodies[i],Bodies[i].Wini,"Wini");
+    if(i==1){
+      printf("%f\n",Bodies[i].thetaini);
+    }
     
     //Adjust units
     Bodies[i].setUnits();
