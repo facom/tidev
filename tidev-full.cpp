@@ -5,7 +5,7 @@ int main(int argc,char *argv[])
 {
   FILE *ff;
   int qdynamic;
-  int i,j;
+  int i,j,n;
   int ip,jp;
   int k=0;
   double tini;
@@ -21,6 +21,10 @@ int main(int argc,char *argv[])
   configLoad("tidev.cfg");
   configInit();
 
+  //RANDOM NUMBER GENERATION
+  RanGen=gsl_rng_alloc(gsl_rng_taus);
+  gsl_rng_set(RanGen,time(NULL));
+
   ////////////////////////////////////////////////////////////////////////
   //CONFIGURATION PARAMETERS
   ////////////////////////////////////////////////////////////////////////
@@ -29,8 +33,9 @@ int main(int argc,char *argv[])
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   configValue(string,mode,"mode");
   if(!mode.compare("tidal")) Mode=0;
-  else if(!mode.compare("tidal+secular")) Mode=1;
-  else if(!mode.compare("secular")) Mode=2;
+  else if(!mode.compare("tidal+semisecular")) Mode=1;
+  else if(!mode.compare("tidal+secular")) Mode=2;
+  else if(!mode.compare("secular")) Mode=3;
   else{
     fprintf(stderr,"Mode not recognized\n");
     exit(1);
@@ -38,18 +43,20 @@ int main(int argc,char *argv[])
   char secstr[100];
   sprintf(secstr,"tidal");
   if(Mode==1)
-    sprintf(secstr,"tidal+secular");
+    sprintf(secstr,"tidal+semisecular");
   if(Mode==2)
+    sprintf(secstr,"tidal+secular");
+  if(Mode==3)
     sprintf(secstr,"secular");
   fprintf(stdout,"Mode: %s (%d)\n",STR(mode),Mode);
   
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //UNITS
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  configValue(real,ul,"ul");
-  configValue(real,um,"um");
-  configValue(real,ut,"ut");
-  configValue(real,uG,"uG");
+  configValue(Real,ul,"ul");
+  configValue(Real,um,"um");
+  configValue(Real,ut,"ut");
+  configValue(Real,uG,"uG");
   setUnits(ul,um,ut,uG);
 
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -61,16 +68,16 @@ int main(int argc,char *argv[])
   //PHYSICAL SYSTEM
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   readBodies();
-
+  
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //NUMERICAL
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  configValue(real,ftint,"ftint");
-  configValue(real,ftorb,"ftorb");
-  configValue(real,dtstep,"dtstep");
-  configValue(real,dtscreen,"dtscreen");
-  configValue(real,dtdump,"dtdump");
-  configValue(real,tint,"tint");
+  configValue(Real,ftint,"ftint");
+  configValue(Real,ftorb,"ftorb");
+  configValue(Real,dtstep,"dtstep");
+  configValue(Real,dtscreen,"dtscreen");
+  configValue(Real,dtdump,"dtdump");
+  configValue(Real,tint,"tint");
 
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   //LIST OF PLANETS
@@ -104,6 +111,16 @@ int main(int argc,char *argv[])
   fprintf(stdout,"Active: %d, Tidal: %d\n",niplanets,niplanetstid);
 
   ////////////////////////////////////////////////////////////////////////
+  //LOAD ECCENTRICITY DATA (IF SEMISECULAR)
+  ////////////////////////////////////////////////////////////////////////
+  if(Mode==1){
+    for(i=0;i<niplanets;i++){
+      ip=iplanets[i];
+      loadEccData(&Bodies[ip]);
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////////////
   //ECCENTRICITY FUNCTIONS
   ////////////////////////////////////////////////////////////////////////
   readGEcc(hansen_coefs);
@@ -119,6 +136,7 @@ int main(int argc,char *argv[])
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
   //INITIAL CONDITIONS
   //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  double phase;
   FILE* ft;
   if((ft=fopen("evolution.dump","r"))!=NULL){
     sprintf(fmode,"a");
@@ -135,6 +153,15 @@ int main(int argc,char *argv[])
       x[0+k]=Bodies[ip].a;
       //1:e
       x[1+k]=Bodies[ip].e;
+      if(Mode==1){
+	//INITIAL PHASE
+	/*
+	phase=2*PI*Random();
+	for(n=0;n<Bodies[ip].NEccFt;n++)
+	  Bodies[ip].EccFt[n][5]=phase;
+	//*/
+	x[1+k]=fourierSeries(0.0,Bodies[ip].EccFt,Bodies[ip].NEccFt,Bodies[ip].TEccFt);
+      }
       //2:Inclination
       x[2+k]=Bodies[ip].I*D2R;
       //3:Omega
@@ -203,7 +230,7 @@ int main(int argc,char *argv[])
   double t,tstep;
 
   int status;
-  real accel,Etid;
+  Real accel,Etid;
 
   double nP,Prot,Protmin,aorb,norb,Porb,Porbmin,dtint=0;
   double h;
@@ -224,7 +251,6 @@ int main(int argc,char *argv[])
   fprintf(stdout,"\t\tdtint = %.2e yrs\n",dtint);
   fprintf(stdout,"\t\tdtstep = %.2e yrs\n",dtstep);
   fprintf(stdout,"\t\tdtscreen = %.2e yrs\n",dtscreen);
-  fprintf(stdout,"\t\tdtstep = %.2e yrs\n",dtstep);
   fprintf(stdout,"\t\tdtdump = %.2e yrs\n",dtdump);
   fprintf(stdout,"\ttint = %.2e yrs\n",tint);
   fprintf(stdout,"\ttend = %.2e yrs\n",tini+tint);

@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#include <complex>
 #include <cstring>
 #include <unistd.h>
 #include <sys/time.h>
@@ -36,6 +37,8 @@
 #include <gsl/gsl_sf.h>
 #include <gsl/gsl_integration.h>
 #include <gsl/gsl_odeiv2.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_roots.h>
 
 //LIBCONFIG
 #include <libconfig.h++>
@@ -46,8 +49,9 @@
 using namespace std;
 using namespace libconfig;
 typedef void* params;
-typedef double real;
+typedef double Real;
 typedef FILE* file;
+typedef complex<double> Complex;
 
 ////////////////////////////////////////////////////////////////////////
 //MACROS
@@ -119,13 +123,16 @@ typedef FILE* file;
 ////////////////////////////////////////////////////////////////////////
 //GLOBAL VARIABLES
 ////////////////////////////////////////////////////////////////////////
+Complex I1(0,1);
 int Mode;
 int Option;
 class Config CFG;
 int NBodies,NPlanets,IBody;
-real UL,UM,UT,GPROG;
-real Gecc[11];
-real TauTidal,TauTriax;
+Real UL,UM,UT,GPROG;
+Real Gecc[11];
+Real X_32[NMAX+1][NMAX+1];
+Real TauTidal,TauTriax;
+gsl_rng* RanGen;
 
 ////////////////////////////////////////////////////////////////////////
 //CLASSES
@@ -140,25 +147,30 @@ public:
   string units;
 
   //Physical
-  real M,R;
-  real rho;
+  Real M,R;
+  Real rho;
 
   //Rheological
-  real mur,alpha,tauM,tauA;
-  real thetaini,Pini,Wini;
-  real gapo,cosapt,sinapt;//Alpha functions 
-  real A2;//A_2
+  Real mur,alpha,tauM,tauA;
+  Real thetaini,Pini,Wini;
+  Real gapo,cosapt,sinapt;//Alpha functions 
+  Real A2;//A_2
   
   //Orbital parameters
-  real mu;
-  real a,e;
-  real n,P;
-  real I,Om,w;
-  real gmt;//1.5*G*Ms^2*R^5/(a^6)
+  Real mu;
+  Real a,e;
+  Real n,P;
+  Real I,Om,w;
+  Real gmt;//1.5*G*Ms^2*R^5/(a^6)
 
   //Momentum of Inertia: C: main, A,B: secondary
-  real MoI,BmA;
-  real A,B,C;
+  Real MoI,BmA;
+  Real A,B,C;
+
+  //Eccentricities transformation
+  int NEccFt;
+  Real TEccFt;
+  Real** EccFt;
   
   //Inertia momenta
   int physicalProperties(){
@@ -221,6 +233,58 @@ int configLoad(const char* file)
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 //UTIL
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+double Random(void)
+{
+  return gsl_rng_uniform(RanGen);
+}
+
+/*
+  Test code:
+
+  double f,df;
+  for(i=0;i<niplanets;i++){
+    ip=iplanets[i];
+    loadEccData(&Bodies[ip]);
+    f=fourierSeries(120.0,Bodies[ip].EccFt,Bodies[ip].NEccFt,Bodies[ip].TEccFt);
+    df=DfourierSeries(120.0,Bodies[ip].EccFt,Bodies[ip].NEccFt,Bodies[ip].TEccFt);
+    fprintf(stdout,"f = %.17e, df/dt = %.17e\n",f,df);
+  }
+ */
+
+double fourierSeries(double t,double** ft,int M,double T)
+{
+  int k;
+  Complex fs,A;
+  double w,phi;
+
+  fs=ft[0][2]+ft[0][3]*I1;
+  for(k=1;k<M;k++){
+    w=2*PI*k/T;
+    A=ft[k][2]+ft[k][3]*I1;
+    phi=ft[k][5];
+    fs+=A*exp(I1*(w*t+phi));
+  }
+  
+  return fs.real();
+}
+
+double DfourierSeries(double t,double** ft,int M,double T)
+{
+  int k;
+  Complex dfs,A;
+  double w,phi;
+
+  dfs=0;
+  for(k=1;k<M;k++){
+    w=2*PI*k/T;
+    A=ft[k][2]+ft[k][3]*I1;
+    phi=ft[k][5];
+    dfs+=A*exp(I1*(w*t+phi))*I1*w;
+  }
+  
+  return dfs.real();
+}
 
 /* ----------------------------------------------------------------------
 PRINT VECTOR
@@ -316,9 +380,6 @@ int readBodies(void)
     configValueList(bodies[i],Bodies[i].thetaini,"thetaini");
     configValueList(bodies[i],Bodies[i].Pini,"Pini");
     configValueList(bodies[i],Bodies[i].Wini,"Wini");
-    if(i==1){
-      printf("%f\n",Bodies[i].thetaini);
-    }
     
     //Adjust units
     Bodies[i].setUnits();
@@ -326,16 +387,12 @@ int readBodies(void)
     //Compute derived properties
     Bodies[i].mu=GPROG*Bodies[0].M;
     Bodies[i].physicalProperties();
-
-    //printf("%f\n",Bodies[i].a);
-
     Bodies[i].orbitalProperties();
 
     //Orbital period in physical units
     if(Bodies[i].Pini<0){
       Bodies[i].Pini=Bodies[i].P/Bodies[i].Wini;
     }
-    //printf("%e %e %e\n",Bodies[i].Wini,Bodies[i].Pini,Bodies[i].P);
 
     Bodies[i].rheologyProperties();
   }
@@ -363,9 +420,8 @@ int readBodies(void)
 int readGEcc(string file)
 {
   FILE* fh=fopen(STR(file),"r");
-  real X_32[NMAX+1][NMAX+1];
   int n,m,i,j,k,q;
-  real coef,tmp;
+  Real coef,tmp;
   for(j=0;j<NMAX;j++) for(k=0;k<NMAX;k++) X_32[j][k]=0.0;
   while(!feof(fh)){
     fscanf(fh,"%d %d %d %d %lf %lf",&n,&m,&j,&k,&coef,&tmp);
@@ -392,9 +448,24 @@ int readGEcc(string file)
   return GSL_SUCCESS;
 }
 
+int updateGEcc(double e)
+{
+  int n,m,i,j,k,q;
+  for(int i=1;i<=10;i++){
+    q=-3+i;
+    k=2+q;
+    Gecc[i]=0.0;
+    for(int j=0;j<NMAX;j++){
+      Gecc[i]+=X_32[j][k]*PINT(e,j);
+    }
+    Gecc[i]*=Gecc[i];
+  }
+  return GSL_SUCCESS;
+}
+
 int Body::setUnits(void)
 {
-  real ul,um;
+  Real ul,um;
   if(units=="EARTH")
     {ul=(REARTH/UL);um=(MEARTH/UM);}
   else if(units=="SUN")
@@ -410,9 +481,9 @@ int Body::setUnits(void)
   Pini*=(HOURS/UT);
 }
 
-int setUnits(real ul,real um,real ut,real G)
+int setUnits(Real ul,Real um,Real ut,Real G)
 {
-  real ratio=(G/GCONST);
+  Real ratio=(G/GCONST);
   if(ut==0){
     UL=ul;UM=um;GPROG=G;
     UT=sqrt(ratio*ul*ul*ul/um);
@@ -450,9 +521,9 @@ supposed to be good to second order in e, from Brouwer+Clemence u0 is
 first guess
 ---------------------------------------------------------------------- */
 #define PREC_ECC_ANO 1e-14
-real solveKepler(real e,real M)
+Real solveKepler(Real e,Real M)
 {
-  real du,u0,l0;
+  Real du,u0,l0;
   du=1.0;
   u0=M+e*sin(M)+0.5*e*e*sin(2.0*M);
   while(fabs(du)>PREC_ECC_ANO){
@@ -1238,17 +1309,19 @@ int secularFunction(double t,const double y[],double yp[],void *param)
 
 int tidalAcceleration(double t,const double y[],double dydt[],params ps)
 {
+  double e;
   SecularEvolution *plsys=(SecularEvolution*)ps;
   int Np,Nptid;
-  real wterm,w220q,X220q;
-  real tauTerm;
-  real tauTidal,tauTriaxial,dotEtid,dota;
-  real n;
+  Real wterm,w220q,X220q;
+  Real tauTerm;
+  Real tauTidal,tauTriaxial,dotEtid,dota;
+  Real n;
   int l=2,m=2,p=0,q;
-  real chitauA;
-  real R,I;
+  Real chitauA;
+  Real R,I;
   int i;
-  real M,E,f,r;
+  Real M,E,f,r;
+  Real de;
 
   static int ncall=1;
 
@@ -1257,7 +1330,7 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
   Nptid=plsys->Nptid;
   
   //RESET dydt
-  if(Mode>0)
+  if(Mode>1)
     memset(dydt,0,Np*NUMVARS*sizeof(dydt[0]));
 
   #ifdef VERBOSE
@@ -1271,14 +1344,22 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
 
   int ip,k,indp;
   Body b;
+  double ab,eb;
 
-  if(Mode==0 || Mode==1){
+  if(Mode==0 || Mode==1 || Mode==2){
     for(ip=0;ip<Nptid;ip++){
       k=NUMVARS*ip;
       indp=plsys->Iplanetstid[ip];
       b=Bodies[indp];
       n=b.n;
-    
+
+      ////////////////////////////////
+      //ORBITAL
+      ////////////////////////////////
+      ab=y[0+k];
+      eb=y[1+k];
+      if(Mode==1){updateGEcc(eb);}
+
       ////////////////////////////////
       //d theta / dt = omega
       ////////////////////////////////
@@ -1314,10 +1395,10 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
       dotEtid*=b.gmt;
   
       //Keplerian parameters
-      M=(real)fmod((real)(n*t),(real)(2*PI));
-      E=solveKepler(b.e,M);
-      f=2*atan(sqrt((1+b.e)/(1-b.e))*sin(E/2)/cos(E/2));
-      r=b.a*(1-b.e*cos(E));
+      M=(Real)fmod((Real)(n*t),(Real)(2*PI));
+      E=solveKepler(eb,M);
+      f=2*atan(sqrt((1+eb)/(1-eb))*sin(E/2)/cos(E/2));
+      r=ab*(1-eb*cos(E));
 
       //Triaxial torque
       tauTriaxial=1.5*(b.B-b.A)*b.mu*sin(2*(f-y[5+k]))/(r*r*r);
@@ -1335,7 +1416,6 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
       //d E / dt:
       ////////////////////////////////
       dydt[7+k]=dotEtid;
-
       ////////////////////////////////
       //Orbit evolution:
       ////////////////////////////////
@@ -1345,7 +1425,7 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
       ////////////////////////////////
       //d a / dt:
       ////////////////////////////////
-      dota=2*b.a*b.a/(b.mu*b.M)*dotEtid;
+      dota=-2*ab*ab/(b.mu*b.M)*dotEtid;
       dydt[0+k]=dota;
 
       ////////////////////////////////
@@ -1356,12 +1436,16 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
       //TORQUE CONTRIB.
       //%%%%%%%%%%%%%%%%%%%%
       dydt[1+k]=
-	1/(2*b.a)*((1-b.e*b.e)*dota/2-(1/b.M)*sqrt(b.a*(1-b.e*b.e)/b.mu)*tauTidal);
-
-      //%%%%%%%%%%%%%%%%%%%%
-      //SECULAR CONTRIB.
-      //%%%%%%%%%%%%%%%%%%%%
+	1/(2*ab)*((1-eb*eb)*dota/2-(1/b.M)*sqrt(ab*(1-eb*eb)/b.mu)*tauTidal);
       
+      if(Mode==1){
+	//%%%%%%%%%%%%%%%%%%%%
+	//SECULAR CONTRIB.
+	//%%%%%%%%%%%%%%%%%%%%
+	de=DfourierSeries(t,Bodies[indp].EccFt,Bodies[indp].NEccFt,Bodies[indp].TEccFt);
+	dydt[1+k]+=de;
+      }
+
       #ifdef VERBOSE
       fprintf(stdout,"Tidal changes:\n");
       fprintf_vec(stdout,"%e ",dydt,NUMVARS*Np);
@@ -1375,7 +1459,7 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
   ////////////////////////////////
   //Secular Contribution
   ////////////////////////////////
-  if(Mode>0){
+  if(Mode>1){
     plsys->update(y);
     plsys->secular(dydt);
   } 
@@ -1388,3 +1472,44 @@ int tidalAcceleration(double t,const double y[],double dydt[],params ps)
 
   return GSL_SUCCESS;
 }
+
+int loadEccData(Body *body)
+{
+  FILE* fl;
+  char fname[1000];
+  int i,N;
+  double T,tmp;
+  sprintf(fname,"data/ft%s.txt",STR(body->name));
+  fl=fopen(fname,"r");
+  fgets(fname,1000,fl);
+  sscanf(fname,"#%d %lf\n",&N,&T);
+  body->EccFt=matrixAlloc(N,6);
+  body->TEccFt=T;
+  for(i=0;i<N;i++){
+    fscanf(fl,"%lf %lf %lf %lf %lf",
+	   &body->EccFt[i][0],
+	   &body->EccFt[i][1],
+	   &body->EccFt[i][2],
+	   &body->EccFt[i][3],
+	   &body->EccFt[i][4]);
+    body->EccFt[i][5]=0.0;
+  }
+  body->NEccFt=N;
+  fclose(fl);
+}
+
+int vecprintf(FILE* stream,char *frm,double vec[],int n,bool verbose=false)
+{
+  char cmpfrm[100];
+  if(verbose) fprintf(stream,"[");
+  for(int i=0;i<n;i++){
+    if(verbose) sprintf(cmpfrm,"%d:%s",i,frm);
+    else sprintf(cmpfrm,"%s",frm);
+    fprintf(stream,cmpfrm,vec[i]);
+    if(i<n-1 && verbose) fprintf(stream,",");
+  }
+  if(verbose) fprintf(stream,"]\n");
+  else fprintf(stream,"\n");
+  return 0;
+}
+
